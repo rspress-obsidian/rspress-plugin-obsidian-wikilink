@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import type { ContentPage } from "./types.ts";
 
 export function normalizeFsPath(input: string): string {
@@ -16,6 +18,29 @@ export function normalizePathKey(input: string): string {
 	}
 
 	return normalized.replace(/\\/g, "/");
+}
+
+/**
+ * Resolve an explicitly relative wikilink target from the current note.
+ *
+ * Obsidian-style `./` and `../` targets are note-relative. Targets without
+ * those prefixes retain vault-root lookup semantics.
+ */
+export function resolveRelativePathKey(
+	currentRelativePath: string,
+	target: string,
+): string | undefined {
+	const normalizedTarget = normalizeFsPath(target.trim());
+	if (!/^\.{1,2}(?:\/|$)/.test(normalizedTarget)) {
+		return undefined;
+	}
+
+	const currentDirectory = path.posix.dirname(
+		normalizeFsPath(currentRelativePath),
+	);
+	return normalizePathKey(
+		path.posix.normalize(path.posix.join(currentDirectory, normalizedTarget)),
+	);
 }
 
 const MAX_LISTED = 12;

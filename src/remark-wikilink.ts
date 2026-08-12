@@ -9,6 +9,7 @@ import type {
 	Text,
 } from "mdast";
 import rehypeStringify from "rehype-stringify";
+import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { type RemarkPluginFactory, unistVisit } from "rspress-plugin-devkit";
@@ -32,12 +33,10 @@ import {
 	normalizeFsPath,
 } from "./utils.ts";
 
-// Tags must start with a letter or underscore (not a digit) and must not be
-// preceded by a word character or "/" (prevents matching URL fragments,
-// hex colour codes, and markdown heading anchors).
-// Supports nested tags (#parent/child) and common Unicode letters (Latin extended, CJK).
+// Obsidian tags accept letters, numbers, symbols, emojis, hyphens, and
+// nested-slash segments, but must contain at least one non-numeric character.
 const TAG_PATTERN =
-	/(?<![/\w])#([a-zA-Z_\u00C0-\u024F\u4E00-\u9FFF][a-zA-Z0-9_\u00C0-\u024F\u4E00-\u9FFF/-]*)/g;
+	/(?<![/\p{L}\p{N}_-])#([\p{L}\p{M}\p{N}\p{Extended_Pictographic}_/-]+)/gu;
 // Capture optional fold operator: '+' = expanded, '-' = collapsed, absent = static
 const CALLOUT_HEADER_PATTERN = /^\[!(\w+)\]([-+])?\s*(.*)$/;
 // Obsidian inline and block comments: %% ... %%
@@ -45,8 +44,8 @@ const COMMENT_PATTERN = /%%[\s\S]*?%%/g;
 // Obsidian text highlighting: ==text==
 const HIGHLIGHT_PATTERN = /==([^=]+)==/g;
 // Obsidian footnotes: [^1] reference, [^1]: definition, and ^[inline text]
-const FOOTNOTE_REF_PATTERN = /\[\^([^\]]+)\](?!:)/g;
-const FOOTNOTE_DEF_PATTERN = /\[\^([^\]]+)\]:\s*(.*)$/gm;
+const FOOTNOTE_REF_PATTERN = /(?<!\[)\[\^([^\]]+)\](?!:)/g;
+const FOOTNOTE_DEF_PATTERN = /^\[\^([^\]]+)\]:[ \t]*(.*(?:\n[ \t]{2,}.*)*)$/gm;
 const INLINE_FOOTNOTE_PATTERN = /\^\[([^\]]+)\]/g;
 
 const WIKILINK_EMBED_PATTERN = /!\[\[([^\]]+)\]\]/g;
@@ -66,24 +65,7 @@ const AUDIO_EXTS = new Set(["mp3", "wav", "ogg", "m4a", "flac"]);
 const VIDEO_EXTS = new Set(["mp4", "webm", "mov", "mkv"]);
 const PDF_EXT = "pdf";
 
-const CALLOUT_ICONS: Record<string, string> = {
-	note: "📝",
-	tip: "💡",
-	warning: "⚠️",
-	danger: "🚨",
-	info: "ℹ️",
-	todo: "☑️",
-	success: "✅",
-	question: "❓",
-	bug: "🐛",
-	example: "📋",
-	quote: "📜",
-	abstract: "📋",
-	failure: "❌",
-	caution: "⚠️",
-};
-
-// Maps Obsidian callout type aliases to their canonical type for icon lookup.
+// Maps Obsidian callout type aliases to their canonical CSS class.
 const CALLOUT_TYPE_ALIASES: Record<string, string> = {
 	abstract: "abstract",
 	summary: "abstract",
@@ -225,10 +207,15 @@ async function remarkWikilinkInner(
 	file: VFile,
 	getDocsRoot: () => string,
 	options: NormalizedPluginOptions,
+	currentFilePathOverride?: string,
+	includePageDecorations = true,
+	visitedOverride?: Set<string>,
+	depth = 0,
+	sourceContent?: string,
 ): Promise<void> {
 	const docsRoot = getDocsRoot();
 	const index = await getCachedContentIndex(docsRoot);
-	const currentFilePath = getCurrentFilePath(file);
+	const currentFilePath = currentFilePathOverride ?? getCurrentFilePath(file);
 
 	if (!currentFilePath) {
 		return;
@@ -241,6 +228,9 @@ async function remarkWikilinkInner(
 		);
 		return;
 	}
+	const footnoteSourceMetadata = extractFootnoteSourceMetadata(
+		sourceContent ?? String(file),
+	);
 
 	// Strip Obsidian comments (%% ... %%) before all other transforms.
 	unistVisit(tree, "text", (node, position, parent) => {
@@ -316,7 +306,7 @@ async function remarkWikilinkInner(
 		if (!node.value.includes("[^")) return;
 		for (const m of node.value.matchAll(FOOTNOTE_DEF_PATTERN)) {
 			const label = m[1] ?? "";
-			const content = m[2] ?? "";
+			const content = normalizeFootnoteContent(m[2] ?? "");
 			if (label && content) {
 				if (footnoteDefs.has(label)) {
 					footnoteDupeLabels.add(label);
@@ -325,6 +315,30 @@ async function remarkWikilinkInner(
 			}
 		}
 	});
+	for (const [label, content] of footnoteSourceMetadata.definitions) {
+		const existing = footnoteDefs.get(label);
+		if (!existing || content.length > existing.length) {
+			footnoteDefs.set(label, content);
+		}
+	}
+
+	if (footnoteSourceMetadata.continuationLineNumbers.size > 0) {
+		unistVisit(tree, "text", (node, position, parent) => {
+			if (!parent || typeof position !== "number") return;
+			if (parent.type !== "paragraph") return;
+			const lineNumber = node.position?.start.line;
+			if (
+				typeof lineNumber === "number" &&
+				footnoteSourceMetadata.continuationLineNumbers.has(lineNumber)
+			) {
+				(parent as Parent & { children: unknown[] }).children.splice(
+					position,
+					1,
+				);
+			}
+		});
+	}
+
 	if (footnoteDupeLabels.size > 0) {
 		file.message(
 			`[rspress-plugin-obsidian-wikilink:footnote] Duplicate footnote label${footnoteDupeLabels.size > 1 ? "s" : ""}: ${[...footnoteDupeLabels].join(", ")}. Later definitions overwrite earlier ones.`,
@@ -361,7 +375,7 @@ async function remarkWikilinkInner(
 					start: m.index ?? 0,
 					end: (m.index ?? 0) + m[0].length,
 					label: m[1] ?? "",
-					content: m[2] ?? "",
+					content: normalizeFootnoteContent(m[2] ?? ""),
 				});
 			}
 			for (const m of text.matchAll(FOOTNOTE_REF_PATTERN)) {
@@ -484,9 +498,12 @@ async function remarkWikilinkInner(
 					replacementNodes.push(createTextNode(text.slice(cursor, start)));
 				}
 
-				if (tagName) {
+				if (tagName && !/^[\p{N}/-]+$/u.test(tagName)) {
 					replacementNodes.push(
-						createLinkNode(`/tags/${encodeTagPathSegment(tagName)}`, fullMatch),
+						createLinkNode(
+							`/tags/${encodeTagPathSegment(tagName)}`,
+							`#${tagName}`,
+						),
 					);
 				} else {
 					replacementNodes.push(createTextNode(fullMatch));
@@ -518,14 +535,14 @@ async function remarkWikilinkInner(
 			file,
 			docsRoot,
 			currentFilePath,
-			new Set([currentPage.absolutePath]),
-			0,
+			visitedOverride ?? new Set([currentPage.absolutePath]),
+			depth,
 		);
 	}
 
 	resolveWikilinksInAst(tree, currentPage, index, options, file);
 
-	if (options.enableBacklinks) {
+	if (includePageDecorations && options.enableBacklinks) {
 		const backlinksMap = await getCachedBacklinksIndex(index);
 		const refs = backlinksMap.get(currentPage.routePath) ?? [];
 		const html = renderBacklinksHtml(refs);
@@ -534,9 +551,7 @@ async function remarkWikilinkInner(
 		}
 	}
 
-	// Wrap the entire page content in a classed div when cssclasses are set.
-	// This mirrors Obsidian's behaviour where cssclasses appear on the note container.
-	if (currentPage.cssclasses.length > 0) {
+	if (includePageDecorations && currentPage.cssclasses.length > 0) {
 		const classes = currentPage.cssclasses.map(escapeHtmlAttribute).join(" ");
 		tree.children.unshift({
 			type: "html",
@@ -548,8 +563,6 @@ async function remarkWikilinkInner(
 
 async function renderTranscludedHtml(
 	content: string,
-	targetPage: ContentPage,
-	index: ContentIndex,
 	options: NormalizedPluginOptions,
 	file: VFile,
 	docsRoot: string,
@@ -557,21 +570,21 @@ async function renderTranscludedHtml(
 	visited: Set<string>,
 	depth: number,
 ): Promise<string> {
-	const transcludedAst = unified().use(remarkParse).parse(content) as Root;
-
-	await processEmbedsInTree(
+	const transcludedAst = unified()
+		.use(remarkParse)
+		.use(remarkGfm)
+		.parse(content) as Root;
+	await remarkWikilinkInner(
 		transcludedAst,
-		targetPage,
-		index,
-		options,
 		file,
-		docsRoot,
+		() => docsRoot,
+		options,
 		currentFilePath,
+		false,
 		visited,
 		depth,
+		content,
 	);
-
-	resolveWikilinksInAst(transcludedAst, targetPage, index, options);
 
 	const htmlProcessor = unified()
 		.use(remarkRehype, { allowDangerousHtml: true })
@@ -633,12 +646,14 @@ async function processEmbedsInTree(
 				replacementNodes.push(createTextNode(text.slice(lastEnd, start)));
 			}
 
+			const parsedEmbed = parseWikiLink(inner, fullMatch);
 			const pipeIdx = inner.indexOf("|");
-			const targetRaw = pipeIdx >= 0 ? inner.slice(0, pipeIdx) : inner;
 			const sizeParam = pipeIdx >= 0 ? inner.slice(pipeIdx + 1) : "";
-			const target = targetRaw.trim();
+			const target = parsedEmbed.target;
+			const fragment = parsedEmbed.subpath
+				? `#${parsedEmbed.subpath.value}`
+				: "";
 			const ext = target.split(".").pop()?.toLowerCase() ?? "";
-
 			if (options.enableMediaEmbeds && IMAGE_EXTS.has(ext)) {
 				const sizeAttr = parseSizeAttr(sizeParam);
 				const resolved = resolveMediaSrc(target, docsRoot, currentFilePath);
@@ -647,7 +662,7 @@ async function processEmbedsInTree(
 						`[rspress-plugin-obsidian-wikilink:media] Image "${target}" not found on disk for ${fullMatch}.`,
 					);
 				}
-				const src = escapeHtmlAttribute(resolved.url);
+				const src = escapeHtmlAttribute(`${resolved.url}${fragment}`);
 				replacementNodes.push({
 					type: "html",
 					value: `<img src="${src}" alt="${escapeHtmlAttribute(target)}"${sizeAttr} loading="lazy" />`,
@@ -659,7 +674,7 @@ async function processEmbedsInTree(
 						`[rspress-plugin-obsidian-wikilink:media] Audio "${target}" not found on disk for ${fullMatch}.`,
 					);
 				}
-				const src = escapeHtmlAttribute(resolved.url);
+				const src = escapeHtmlAttribute(`${resolved.url}${fragment}`);
 				replacementNodes.push({
 					type: "html",
 					value: `<audio controls src="${src}"></audio>`,
@@ -672,7 +687,7 @@ async function processEmbedsInTree(
 						`[rspress-plugin-obsidian-wikilink:media] Video "${target}" not found on disk for ${fullMatch}.`,
 					);
 				}
-				const src = escapeHtmlAttribute(resolved.url);
+				const src = escapeHtmlAttribute(`${resolved.url}${fragment}`);
 				replacementNodes.push({
 					type: "html",
 					value: `<video controls src="${src}"${sizeAttr}></video>`,
@@ -684,13 +699,15 @@ async function processEmbedsInTree(
 						`[rspress-plugin-obsidian-wikilink:media] PDF "${target}" not found on disk for ${fullMatch}.`,
 					);
 				}
-				const src = escapeHtmlAttribute(resolved.url);
+				const src = escapeHtmlAttribute(`${resolved.url}${fragment}`);
+				const pdfHeight =
+					parsedEmbed.subpath?.value.match(/^height=(\d+)$/i)?.[1] ?? "600";
 				replacementNodes.push({
 					type: "html",
-					value: `<iframe src="${src}" width="100%" height="600px" frameborder="0"></iframe>`,
+					value: `<iframe src="${src}" width="100%" height="${pdfHeight}px" frameborder="0"></iframe>`,
 				});
 			} else if (options.enableTransclusion) {
-				const resolved = resolveWikiLink(parseWikiLink(target, fullMatch), {
+				const resolved = resolveWikiLink(parsedEmbed, {
 					currentPage,
 					index,
 					options: resolveOptions,
@@ -713,7 +730,7 @@ async function processEmbedsInTree(
 								resolved.targetPage.absolutePath,
 								"utf-8",
 							);
-							const parsed = parseWikiLink(target, fullMatch);
+							const parsed = parsedEmbed;
 							let transcludedContent: string | undefined;
 
 							if (parsed.subpath) {
@@ -746,8 +763,6 @@ async function processEmbedsInTree(
 
 							const transcludedHtml = await renderTranscludedHtml(
 								transcludedContent,
-								resolved.targetPage,
-								index,
 								options,
 								file,
 								docsRoot,
@@ -979,7 +994,6 @@ function processCallouts(tree: Root): void {
 		const calloutType = CALLOUT_TYPE_ALIASES[rawType] ?? rawType;
 		const foldState = calloutMatch[2];
 		const calloutTitle = calloutMatch[3]?.trim() || rawType;
-		const icon = CALLOUT_ICONS[calloutType] ?? "📝";
 
 		const remainingLines = lines.slice(1);
 		if (remainingLines.length === 0) {
@@ -991,11 +1005,9 @@ function processCallouts(tree: Root): void {
 		const replacements: Root["children"] = buildCalloutNodes(
 			calloutType,
 			calloutTitle,
-			icon,
 			foldState,
 			bq.children as Root["children"],
 		);
-
 		parentNode.children.splice(position, 1, ...replacements);
 	}
 }
@@ -1008,7 +1020,6 @@ function processCallouts(tree: Root): void {
 function buildCalloutNodes(
 	calloutType: string,
 	calloutTitle: string,
-	icon: string,
 	foldState: string | undefined,
 	contentChildren: Root["children"],
 ): Root["children"] {
@@ -1019,13 +1030,12 @@ function buildCalloutNodes(
 		const openAttr = foldState === "+" ? " open" : "";
 		const openTag: HTML = {
 			type: "html",
-			value: `<details class="callout callout-${escapedType}"${openAttr}>`,
+			value: `<details class="callout callout-${escapedType}" data-callout="${escapedType}"${openAttr}>`,
 		};
 		const summaryTag: HTML = {
 			type: "html",
-			value: `<summary class="callout-title">${icon} ${escapedTitle}</summary>`,
+			value: `<summary class="callout-title">${escapedTitle}</summary>`,
 		};
-
 		if (contentChildren.length > 0) {
 			return [
 				openTag,
@@ -1045,13 +1055,12 @@ function buildCalloutNodes(
 
 	const openDiv: HTML = {
 		type: "html",
-		value: `<div class="callout callout-${escapedType}">`,
+		value: `<div class="callout callout-${escapedType}" data-callout="${escapedType}">`,
 	};
 	const titleDiv: HTML = {
 		type: "html",
-		value: `<div class="callout-title">${icon} ${escapedTitle}</div>`,
+		value: `<div class="callout-title">${escapedTitle}</div>`,
 	};
-
 	if (contentChildren.length > 0) {
 		return [
 			openDiv,
@@ -1082,8 +1091,12 @@ function extractHeadingSection(
 ): string | undefined {
 	const stripped = stripFrontmatter(content);
 	const lines = stripped.split("\n");
-	const normalizedTarget = heading.trim().toLowerCase();
-
+	const normalizedTarget =
+		heading
+			.split("#")
+			.map((part) => part.trim().toLowerCase())
+			.filter(Boolean)
+			.at(-1) ?? heading.trim().toLowerCase();
 	let startLine = -1;
 	let startLevel = 0;
 
@@ -1144,11 +1157,15 @@ function extractBlockSection(
 		const lineNorm = line.trim().toLowerCase();
 
 		if (lineNorm === `^${normalizedId}`) {
-			for (let j = i - 1; j >= 0; j--) {
-				const prev = (lines[j] ?? "").trim();
-				if (prev) return prev;
+			let start = i - 1;
+			while (start >= 0 && (lines[start] ?? "").trim() !== "") {
+				start -= 1;
 			}
-			return undefined;
+			const block = lines
+				.slice(start + 1, i)
+				.join("\n")
+				.trim();
+			return block || undefined;
 		}
 
 		if (line.toLowerCase().includes(`^${normalizedId}`)) {
@@ -1157,6 +1174,32 @@ function extractBlockSection(
 	}
 
 	return undefined;
+}
+function extractFootnoteSourceMetadata(source: string): {
+	definitions: Map<string, string>;
+	continuationLineNumbers: Set<number>;
+} {
+	const definitions = new Map<string, string>();
+	const continuationLineNumbers = new Set<number>();
+
+	for (const match of source.matchAll(FOOTNOTE_DEF_PATTERN)) {
+		const label = match[1] ?? "";
+		const content = normalizeFootnoteContent(match[2] ?? "");
+		if (!label || !content) continue;
+
+		definitions.set(label, content);
+		const startLine = source.slice(0, match.index ?? 0).split(/\r?\n/).length;
+		const lines = (match[0] ?? "").split(/\r?\n/);
+		for (let offset = 1; offset < lines.length; offset += 1) {
+			continuationLineNumbers.add(startLine + offset);
+		}
+	}
+
+	return { definitions, continuationLineNumbers };
+}
+
+function normalizeFootnoteContent(content: string): string {
+	return content.replace(/\n[ \t]+/g, " ").trim();
 }
 
 function renderAllFootnotesHtml(

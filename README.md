@@ -17,9 +17,10 @@ Obsidian-style wikilinks for Rspress. Write your docs in Obsidian, publish with 
 |--------|-------------|
 | `[[Page]]` | Link to another page |
 | `[[Page\|Alias]]` | Link with custom display text |
-| `[[Page#Heading]]` | Link to a specific heading |
 | `[[Page#Heading\|Alias]]` | Link to heading with alias |
 | `[[#Heading]]` | Link to heading in current page |
+| `[[## heading]]` | Vault-wide heading search (resolves when unique) |
+| `[[^^block-id]]` | Vault-wide block search (resolves when unique) |
 | `[[Page#^block]]` | Block reference (standalone or inline) |
 | `![[Page]]` | Transclude full page content |
 | `![[Page#Heading]]` | Transclude a specific section |
@@ -32,6 +33,42 @@ Obsidian-style wikilinks for Rspress. Write your docs in Obsidian, publish with 
 | `[^1]` | Footnotes with definitions |
 | `- [ ] task` | Task lists (native Rspress) |
 | Backlinks panel | Auto-generated per page (opt-in) |
+
+
+## Compatibility scope
+
+This plugin targets **static Obsidian-flavored Markdown** published through Rspress. It
+supports wikilinks, heading and block references, unique vault-wide search links,
+transclusion, media embeds, callouts, comments, highlights, tags, footnotes, selected
+frontmatter fields, and backlinks.
+
+It does not emulate Obsidian's application runtime. Canvas files, Dataview or other
+community-plugin code, workspace navigation, graph views, daily-note commands, and
+editor-only features are outside the static Markdown pipeline. Obsidian features not
+listed in the syntax table should be treated as unsupported until covered by a test.
+
+The supported static syntax matrix is:
+
+| Capability | Parser/index | Resolver | End-to-end HTML |
+|---|---:|---:|---:|
+| Page links and aliases | Yes | Yes | Yes |
+| Relative paths | Yes | Yes | Yes |
+| Heading and block links | Yes | Yes | Yes |
+| Current-page links | Yes | Yes | Yes |
+| Vault-wide searches | Yes | Yes | Yes |
+| Page and section transclusion | Yes | Yes | Yes |
+| Media embeds | Yes | Yes | Yes |
+| Callouts | Yes | N/A | Yes |
+| Tags and backlinks | Yes | Yes | Yes |
+| Footnotes and highlights | Yes | N/A | Yes |
+| Frontmatter metadata | Yes | Yes | Yes |
+| Broken and ambiguous diagnostics | Yes | Yes | Yes |
+
+Callouts, footnotes, and highlights are syntax transformations rather than page
+target resolution, so a resolver test is not applicable to those capabilities.
+The compatibility fixtures cover Unicode, punctuation, duplicate headings,
+duplicate page names, nested folders, explicit relative paths, and missing
+targets.
 
 The plugin rewrites wikilinks during the Rspress remark pipeline. All features are opt-in via configuration.
 
@@ -130,7 +167,7 @@ Supported aliases: `abstract`/`summary`/`tldr`, `check`/`done`, `help`/`faq`, `c
 Output:
 ```html
 <div class="callout callout-tip">
-  <div class="callout-title">💡 Pro Tip</div>
+  <div class="callout-title">Pro Tip</div>
   <div class="callout-content">This is a callout</div>
 </div>
 ```
@@ -293,26 +330,33 @@ Inline footnote^[This is inline] works differently.
 
 Resolution order for `[[target]]`:
 
-1. Exact path match
-2. Unique basename match
-3. Unique frontmatter `title` match
-4. Unique frontmatter `aliases` match
-5. Fuzzy matching (when `enableFuzzyMatching` is enabled)
-6. Case-insensitive fallback (when `enableCaseInsensitiveLookup` is enabled)
-7. Rejected as broken or ambiguous
+1. Explicitly relative path (`./` or `../`) from the current note
+2. Exact vault path match
+3. Unique basename match
+4. Unique frontmatter `title` match
+5. Unique frontmatter `aliases` match
+6. Fuzzy matching (when `enableFuzzyMatching` is enabled)
+7. Case-insensitive fallback (when `enableCaseInsensitiveLookup` is enabled)
+8. Rejected as broken or ambiguous
 
 Examples:
-
 | Wikilink | Resolves via |
 |----------|-------------|
 | `[[guide/getting-started]]` | Exact path |
+| `[[../shared/Concept]]` | Path relative to the current note |
 | `[[getting-started]]` | Basename (unique) |
 | `[[Onboarding Guide]]` | Frontmatter `title` |
 | `[[Start Here]]` | Frontmatter `aliases` |
 | `[[#Install]]` | Current page heading |
+| `[[## Install]]` | Vault-wide heading search (unique result) |
+| `[[^^install-block]]` | Vault-wide block search (unique result) |
 | `[[guide/getting-started#^install-block]]` | Block reference |
 | `![[guide/getting-started#Install]]` | Section transclusion |
 
+Heading anchors use Rspress-compatible GitHub slugging: spaces become hyphens,
+Unicode letters are preserved, duplicate headings receive `-1`, `-2`, and so on,
+and explicit `{#custom-anchor}` IDs take precedence. Explicit relative paths do
+not fall back to basename or metadata lookup when their target is missing.
 Supported heading formats: ATX, ATX with closing `#`, up to 3 leading spaces, setext (`===` / `---`), explicit IDs `{#custom-anchor}`
 
 Supported block ID formats: standalone line (`^block-id`) and inline at end of paragraph (`text content ^block-id`)
@@ -440,9 +484,8 @@ Types:
 - And more — see `src/types.ts`
 
 ## License
-
 MIT License — see [LICENSE](LICENSE) file for details.
 
 ## Status
 
-v0.1.1 — 100% Obsidian markdown feature coverage for static Rspress docs.
+v0.1.1 — Static Obsidian-flavored Markdown support for Rspress; see the compatibility scope above for deliberate boundaries.

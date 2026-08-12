@@ -45,14 +45,31 @@ export function parseWikiLink(inner: string, raw: string): ParsedWikiLink {
 	const alias =
 		pipeIndex >= 0 ? inner.slice(pipeIndex + 1).trim() || undefined : undefined;
 
-	const hashIndex = targetAndAnchor.indexOf("#");
-	const rawTarget =
-		hashIndex >= 0 ? targetAndAnchor.slice(0, hashIndex) : targetAndAnchor;
-	const rawAnchor =
-		hashIndex >= 0 ? targetAndAnchor.slice(hashIndex + 1) : undefined;
+	const searchInput = targetAndAnchor.trim();
+	const search = searchInput.startsWith("##")
+		? "heading"
+		: searchInput.startsWith("^^")
+			? "block"
+			: undefined;
+	if (search) {
+		return {
+			raw,
+			target: "",
+			alias,
+			isEmbed,
+			subpath: {
+				kind: search,
+				value: searchInput.slice(2).trim(),
+			},
+			search,
+			isCurrentPageReference: false,
+		};
+	}
 
+	const hashParts = targetAndAnchor.split("#");
+	const rawTarget = hashParts.shift() ?? targetAndAnchor;
 	const target = rawTarget.trim();
-	const anchor = rawAnchor?.trim() || undefined;
+	const anchor = hashParts.join("#").trim() || undefined;
 	const subpath = anchor
 		? anchor.startsWith("^")
 			? { kind: "block" as const, value: anchor.slice(1).trim() }

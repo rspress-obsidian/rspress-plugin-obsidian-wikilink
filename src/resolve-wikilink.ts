@@ -5,6 +5,7 @@ import {
 	slugifyHeading,
 } from "./slug.ts";
 import type {
+	ContentAsset,
 	ContentPage,
 	ParsedWikiLink,
 	ResolveContext,
@@ -15,6 +16,7 @@ import {
 	formatAvailableBlocks,
 	formatAvailableHeadings,
 	normalizePathKey,
+	resolveRelativePathKey,
 } from "./utils.ts";
 
 /**
@@ -35,6 +37,10 @@ export function resolveWikiLink(
 	parsed: ParsedWikiLink,
 	context: ResolveContext,
 ): ResolvedWikiLink {
+	if (parsed.search) {
+		return resolveVaultSearch(parsed, context);
+	}
+
 	if (parsed.isCurrentPageReference) {
 		return resolveCurrentPageReference(context.currentPage, parsed);
 	}
@@ -46,11 +52,50 @@ export function resolveWikiLink(
 		};
 	}
 
+	const relativePathKey = resolveRelativePathKey(
+		context.currentPage.relativePath,
+		parsed.target,
+	);
+	if (relativePathKey !== undefined) {
+		const relativePage = context.index.byPathKey.get(relativePathKey);
+		if (relativePage) {
+			return resolveAgainstPage(relativePage, parsed);
+		}
+
+		const relativeAsset = context.index.byAssetPath.get(relativePathKey);
+		if (relativeAsset) {
+			return resolveAgainstAsset(relativeAsset, parsed);
+		}
+
+		return {
+			status: "broken-page",
+			message: `Unable to resolve relative wikilink target "${parsed.target}" from ${context.currentPage.relativePath}.`,
+		};
+	}
+
 	const exactPathKey = normalizePathKey(parsed.target);
 	const exactPage = context.index.byPathKey.get(exactPathKey);
 
 	if (exactPage) {
 		return resolveAgainstPage(exactPage, parsed);
+	}
+	const exactAsset = context.index.byAssetPath.get(exactPathKey);
+	if (exactAsset) {
+		return resolveAgainstAsset(exactAsset, parsed);
+	}
+	const assetBaseName = path.basename(exactPathKey);
+
+	const assetCandidates =
+		context.index.byAssetBaseName.get(assetBaseName) ?? [];
+	if (assetCandidates.length === 1) {
+		const asset = assetCandidates[0];
+		if (asset) return resolveAgainstAsset(asset, parsed);
+	}
+	if (assetCandidates.length > 1) {
+		return {
+			status: "ambiguous-page",
+			message: `Wikilink target "${parsed.target}" matches multiple attachments; use a path-qualified link.`,
+		};
 	}
 
 	const exactBaseName = path.basename(exactPathKey);
@@ -80,6 +125,23 @@ export function resolveWikiLink(
 	}
 
 	if (context.options?.enableCaseInsensitiveLookup) {
+		const normalizedAssetTarget = exactPathKey.toLowerCase();
+		const caseInsensitiveAssets = context.index.assets.filter(
+			(asset) => asset.pathKey.toLowerCase() === normalizedAssetTarget,
+		);
+		if (caseInsensitiveAssets.length === 1) {
+			const asset = caseInsensitiveAssets[0];
+			if (asset) return resolveAgainstAsset(asset, parsed);
+		}
+		if (caseInsensitiveAssets.length > 1) {
+			return {
+				status: "ambiguous-page",
+				message: `Wikilink target "${parsed.target}" matches multiple attachments; use a case-sensitive path.`,
+			};
+		}
+	}
+
+	if (context.options?.enableCaseInsensitiveLookup) {
 		const caseInsensitiveResolution = resolveCaseInsensitivePage(
 			context,
 			parsed.target,
@@ -103,6 +165,81 @@ export function resolveWikiLink(
 	return {
 		status: "broken-page",
 		message: `Unable to resolve wikilink target "${parsed.target}".`,
+	};
+}
+function resolveVaultSearch(
+	parsed: ParsedWikiLink,
+	context: ResolveContext,
+): ResolvedWikiLink {
+	const query = parsed.subpath?.value.trim().toLowerCase() ?? "";
+	if (!query || !parsed.search) {
+		return {
+			status: "broken-page",
+			message: `Vault search target is empty in ${parsed.raw}.`,
+		};
+	}
+
+	const matches: Array<{
+		page: ContentPage;
+		fragment: string;
+		label: string;
+		description?: string;
+	}> = [];
+
+	for (const page of context.index.pages) {
+		if (parsed.search === "heading") {
+			for (const heading of page.headings) {
+				if (heading.rawText.toLowerCase().includes(query)) {
+					matches.push({
+						page,
+						fragment: heading.explicitId ?? heading.slug,
+						label: heading.rawText,
+						description: heading.preview,
+					});
+				}
+			}
+		} else {
+			for (const block of page.blocks) {
+				if (block.id.toLowerCase().includes(query)) {
+					matches.push({
+						page,
+						fragment: `^${block.id}`,
+						label: `^${block.id}`,
+					});
+				}
+			}
+		}
+	}
+
+	if (matches.length === 0) {
+		return {
+			status: "broken-page",
+			message: `Vault search target "${parsed.subpath?.value}" did not match any ${parsed.search}.`,
+		};
+	}
+	if (matches.length > 1) {
+		return {
+			status: "ambiguous-page",
+			message: `Vault search target "${parsed.subpath?.value}" matched multiple ${parsed.search} results.`,
+		};
+	}
+
+	const match = matches[0];
+	if (!match) {
+		return {
+			status: "broken-page",
+			message: `Vault search target "${parsed.subpath?.value}" did not match any ${parsed.search}.`,
+		};
+	}
+
+	return {
+		status: "ok",
+		href: `${match.page.routePath}#${match.fragment}`,
+		label:
+			parsed.alias ??
+			(parsed.search === "block" ? match.label.slice(1) : match.label),
+		description: match.description,
+		targetPage: match.page,
 	};
 }
 
@@ -188,6 +325,17 @@ function resolveAgainstPage(
 		targetPage: page,
 	};
 }
+function resolveAgainstAsset(
+	asset: ContentAsset,
+	parsed: ParsedWikiLink,
+): ResolvedWikiLink {
+	const fragment = parsed.subpath ? `#${parsed.subpath.value}` : "";
+	return {
+		status: "ok",
+		href: `${asset.urlPath}${fragment}`,
+		label: parsed.alias ?? humanizeBaseName(asset.baseName),
+	};
+}
 
 function resolveSubpath(
 	page: ContentPage,
@@ -204,16 +352,22 @@ function resolveHeadingSlug(
 	page: ContentPage,
 	anchor: string,
 ): string | undefined {
-	const normalizedAnchor = normalizeLookupValue(anchor);
+	const headingParts = anchor
+		.split("#")
+		.map((part) => part.trim())
+		.filter(Boolean);
+	const lookupAnchor = headingParts.at(-1) ?? anchor;
+	const normalizedAnchor = normalizeLookupValue(lookupAnchor);
 
 	// Attempt 1: explicit heading ID match — O(1) via pre-computed map.
-	const explicitEntry = page.headingBySlug.get(normalizedAnchor);
+	const explicitEntry =
+		page.headingBySlug.get(lookupAnchor) ??
+		page.headingBySlug.get(normalizedAnchor);
 	if (explicitEntry?.explicitId) {
 		return explicitEntry.explicitId;
 	}
 
-	const slugifiedAnchor = slugifyHeading(anchor);
-
+	const slugifiedAnchor = slugifyHeading(lookupAnchor);
 	// Attempt 2: slug match — O(1) via pre-computed map.
 	const slugEntry = page.headingBySlug.get(slugifiedAnchor);
 	if (slugEntry) {
@@ -237,7 +391,7 @@ function resolveHeadingSlug(
 
 	// Attempt 5: case-insensitive substring match (for Unicode headings).
 	for (const heading of page.headings) {
-		if (heading.rawText.toLowerCase().includes(anchor.toLowerCase())) {
+		if (heading.rawText.toLowerCase().includes(lookupAnchor.toLowerCase())) {
 			return heading.explicitId ?? heading.slug;
 		}
 	}
@@ -263,6 +417,16 @@ function resolveBlockId(
 function defaultLabel(parsed: ParsedWikiLink, page: ContentPage): string {
 	if (parsed.subpath) {
 		return parsed.subpath.value;
+	}
+
+	const normalizedTarget = normalizeLookupValue(parsed.target);
+	if (
+		(page.title && normalizeLookupValue(page.title) === normalizedTarget) ||
+		page.aliases.some(
+			(alias) => normalizeLookupValue(alias) === normalizedTarget,
+		)
+	) {
+		return parsed.target.trim();
 	}
 
 	if (page.baseName.length > 0) {

@@ -10,6 +10,7 @@ import { resolveWikiLink } from "../src/resolve-wikilink";
 import type { NormalizedPluginOptions } from "../src/types";
 
 const fixtureRoot = path.resolve(process.cwd(), "tests/fixtures/basic");
+const assetsFixtureRoot = path.resolve(process.cwd(), "tests/fixtures/assets");
 const strictFixtureRoot = path.resolve(process.cwd(), "tests/fixtures/strict");
 const headingFixtureRoot = path.resolve(
 	process.cwd(),
@@ -53,6 +54,15 @@ const circularTransclusionFixtureRoot = path.resolve(
 const deepTransclusionFixtureRoot = path.resolve(
 	process.cwd(),
 	"tests/fixtures/deep-transclusion",
+);
+const transclusionFeaturesFixtureRoot = path.resolve(
+	process.cwd(),
+	"tests/fixtures/transclusion-features",
+);
+
+const compatibilityFixtureRoot = path.resolve(
+	process.cwd(),
+	"tests/fixtures/compatibility",
 );
 
 const DEFAULT_OPTIONS: NormalizedPluginOptions = {
@@ -102,6 +112,17 @@ describe("parseWikiLink", () => {
 		});
 	});
 
+	test("parses note-relative page links", () => {
+		expect(parseWikiLink("../shared/Concept", "[[../shared/Concept]]")).toEqual(
+			{
+				raw: "[[../shared/Concept]]",
+				target: "../shared/Concept",
+				isEmbed: false,
+				isCurrentPageReference: false,
+			},
+		);
+	});
+
 	test("parses embeds and block references", () => {
 		const parsed = parseWikiLink(
 			"guide/getting-started#^install-block|Install block",
@@ -118,6 +139,34 @@ describe("parseWikiLink", () => {
 				value: "install-block",
 			},
 			isCurrentPageReference: false,
+		});
+	});
+
+	test("preserves nested heading fragments", () => {
+		expect(
+			parseWikiLink("Page#Parent#Child|Child", "[[Page#Parent#Child|Child]]"),
+		).toEqual({
+			raw: "[[Page#Parent#Child|Child]]",
+			target: "Page",
+			alias: "Child",
+			isEmbed: false,
+			subpath: { kind: "heading", value: "Parent#Child" },
+			isCurrentPageReference: false,
+		});
+	});
+
+	test("parses vault-wide heading and block searches", () => {
+		expect(parseWikiLink("## Install", "[[## Install]]")).toMatchObject({
+			target: "",
+			search: "heading",
+			subpath: { kind: "heading", value: "Install" },
+		});
+		expect(
+			parseWikiLink("^^install-block", "[[^^install-block]]"),
+		).toMatchObject({
+			target: "",
+			search: "block",
+			subpath: { kind: "block", value: "install-block" },
 		});
 	});
 
@@ -167,6 +216,28 @@ describe("buildContentIndex", () => {
 		]);
 	});
 
+	test("matches Obsidian-compatible heading anchor corpus", async () => {
+		const index = await buildContentIndex(compatibilityFixtureRoot);
+		const page = index.byPathKey.get("shared/Concept");
+
+		expect(page?.headings.map(({ preview: _, ...heading }) => heading)).toEqual(
+			[
+				{ rawText: "Concept", slug: "concept" },
+				{ rawText: "Café Déjà Vu", slug: "café-déjà-vu" },
+				{ rawText: "Punctuation: A/B & C", slug: "punctuation-ab--c" },
+				{ rawText: "😀 Emoji Heading", slug: "-emoji-heading" },
+				{ rawText: "重复 标题", slug: "重复-标题" },
+				{ rawText: "Duplicate", slug: "duplicate" },
+				{ rawText: "Duplicate", slug: "duplicate-1" },
+				{
+					rawText: "Explicit Anchor",
+					slug: "explicit-anchor",
+					explicitId: "explicit-anchor",
+				},
+			],
+		);
+	});
+
 	test("extracts frontmatter titles and aliases", async () => {
 		const index = await buildContentIndex(aliasFixtureRoot);
 		const page = index.byPathKey.get("guide/getting-started");
@@ -179,6 +250,13 @@ describe("buildContentIndex", () => {
 		expect(index.byAlias.get("start here")?.[0]?.pathKey).toBe(
 			"guide/getting-started",
 		);
+	});
+	test("indexes attachment files and inline tags", async () => {
+		const index = await buildContentIndex(assetsFixtureRoot);
+
+		expect(index.assets.map((asset) => asset.pathKey)).toContain("image.png");
+		expect(index.byTag.get("asset-test")?.[0]?.pathKey).toBe("");
+		expect(index.byAssetPath.get("image.png")?.urlPath).toBe("/image.png");
 	});
 });
 
@@ -202,6 +280,60 @@ describe("resolveWikiLink", () => {
 		});
 	});
 
+	test("resolves relative wikilinks from the current note", async () => {
+		const index = await buildContentIndex(compatibilityFixtureRoot);
+		const currentPage = index.byPathKey.get("notes/current");
+
+		expect(currentPage).toBeDefined();
+
+		const pageResult = resolveWikiLink(
+			parseWikiLink("../shared/Concept", "[[../shared/Concept]]"),
+			{ currentPage: currentPage!, index },
+		);
+		const headingResult = resolveWikiLink(
+			parseWikiLink(
+				"../shared/Concept#Café Déjà Vu",
+				"[[../shared/Concept#Café Déjà Vu]]",
+			),
+			{ currentPage: currentPage!, index },
+		);
+		const explicitIdResult = resolveWikiLink(
+			parseWikiLink(
+				"../shared/Concept#EXPLICIT-ANCHOR",
+				"[[../shared/Concept#EXPLICIT-ANCHOR]]",
+			),
+			{ currentPage: currentPage!, index },
+		);
+
+		expect(pageResult).toMatchObject({
+			status: "ok",
+			href: "/shared/Concept",
+		});
+		expect(headingResult).toMatchObject({
+			status: "ok",
+			href: "/shared/Concept#café-déjà-vu",
+		});
+		expect(explicitIdResult).toMatchObject({
+			status: "ok",
+			href: "/shared/Concept#explicit-anchor",
+		});
+		expect(index.backlinks.get("/shared/Concept")).toEqual([
+			{ routePath: "/notes/current", title: "current" },
+		]);
+	});
+
+	test("does not fall back from an unresolved relative wikilink", async () => {
+		const index = await buildContentIndex(compatibilityFixtureRoot);
+		const currentPage = index.byPathKey.get("notes/current")!;
+
+		const result = resolveWikiLink(
+			parseWikiLink("../missing/Concept", "[[../missing/Concept]]"),
+			{ currentPage, index },
+		);
+
+		expect(result.status).toBe("broken-page");
+	});
+
 	test("resolves basename links when unique", async () => {
 		const index = await buildContentIndex(fixtureRoot);
 		const currentPage = index.byPathKey.get("")!;
@@ -218,6 +350,28 @@ describe("resolveWikiLink", () => {
 			status: "ok",
 			href: "/guide/advanced#advanced-usage",
 			label: "Advanced Usage",
+		});
+	});
+	test("resolves unique vault-wide heading and block searches", async () => {
+		const index = await buildContentIndex(fixtureRoot);
+		const currentPage = index.byPathKey.get("")!;
+
+		const headingResult = resolveWikiLink(
+			parseWikiLink("## Advanced Usage", "[[## Advanced Usage]]"),
+			{ currentPage, index },
+		);
+		const blockResult = resolveWikiLink(
+			parseWikiLink("^^install-block", "[[^^install-block]]"),
+			{ currentPage, index },
+		);
+
+		expect(headingResult).toMatchObject({
+			status: "ok",
+			href: "/guide/advanced#advanced-usage",
+		});
+		expect(blockResult).toMatchObject({
+			status: "ok",
+			href: "/guide/getting-started#^install-block",
 		});
 	});
 
@@ -436,6 +590,65 @@ describe("remarkWikilink", () => {
 		expect(output1).toEndWith("\n");
 	});
 
+	test("rewrites note-relative links end to end", async () => {
+		const processor = makeProcessor(compatibilityFixtureRoot);
+
+		const file = await processor.process({
+			value:
+				"See [[../shared/Concept#Café Déjà Vu]] and [[../shared/Concept]].",
+			path: path.resolve(compatibilityFixtureRoot, "notes/current.md"),
+		});
+
+		expect(String(file)).toContain(
+			"[Café Déjà Vu](/shared/Concept#café-déjà-vu)",
+		);
+		expect(String(file)).toContain("[Concept](/shared/Concept)");
+	});
+
+	test("rewrites unique vault-wide searches end to end", async () => {
+		const processor = makeProcessor(fixtureRoot);
+
+		const file = await processor.process({
+			value: "See [[## Advanced Usage]] and [[^^install-block]].",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		expect(String(file)).toContain(
+			"[Advanced Usage](/guide/advanced#advanced-usage",
+		);
+		expect(String(file)).toContain(
+			"[install-block](/guide/getting-started#^install-block)",
+		);
+	});
+
+	test("rewrites frontmatter title and alias links end to end", async () => {
+		const processor = makeProcessor(aliasFixtureRoot);
+
+		const file = await processor.process({
+			value: "See [[Onboarding Guide]] and [[Start Here]].",
+			path: path.resolve(aliasFixtureRoot, "index.md"),
+		});
+
+		expect(String(file)).toContain(
+			"[Onboarding Guide](/guide/getting-started)",
+		);
+		expect(String(file)).toContain("[Start Here](/guide/getting-started)");
+	});
+
+	test("appends backlinks HTML end to end", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableBacklinks: true,
+		});
+
+		const file = await processor.process({
+			value: "Getting started content.",
+			path: path.resolve(fixtureRoot, "guide/getting-started.md"),
+		});
+
+		expect(String(file)).toContain('<div class="obsidian-backlinks">');
+		expect(String(file)).toContain('<a href="/">');
+	});
+
 	test("supports current-page anchors", async () => {
 		const processor = makeProcessor(fixtureRoot);
 
@@ -503,6 +716,19 @@ describe("transclusion", () => {
 		expect(output).toContain("Install");
 		expect(output).not.toContain("Getting Started\n");
 	});
+	test("renders GFM tables inside transcluded content", async () => {
+		const processor = makeProcessor(transclusionFeaturesFixtureRoot, {
+			enableTransclusion: true,
+		});
+		const file = await processor.process({
+			value: "![[source]]",
+			path: path.resolve(transclusionFeaturesFixtureRoot, "index.md"),
+		});
+		const output = String(file);
+		expect(output).toContain("<table>");
+		expect(output).toContain("<th>Syntax</th>");
+		expect(output).toContain("Transclude full page content");
+	});
 
 	test("transclubes block reference only", async () => {
 		const processor = makeProcessor(fixtureRoot, {
@@ -563,6 +789,22 @@ describe("transclusion", () => {
 			file.messages.some((m) => String(m).includes("Max transclusion depth")),
 		).toBe(true);
 	});
+	test("applies Obsidian transforms inside transcluded content", async () => {
+		const processor = makeProcessor(transclusionFeaturesFixtureRoot, {
+			enableCallouts: true,
+			enableTransclusion: true,
+		});
+		const file = await processor.process({
+			value: "![[source]]",
+			path: path.resolve(transclusionFeaturesFixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain('data-callout="tip"');
+		expect(output).toContain("<mark>Important</mark>");
+		expect(output).toContain("First line. Second line.");
+		expect(output).not.toContain("[!tip]");
+	});
 });
 
 describe("tag linking", () => {
@@ -594,8 +836,10 @@ describe("callouts", () => {
 		});
 
 		const output = String(file);
-		expect(output).toContain('<div class="callout callout-tip">');
-		expect(output).toContain('<div class="callout-title">💡 Pro Tip</div>');
+		expect(output).toContain(
+			'<div class="callout callout-tip" data-callout="tip">',
+		);
+		expect(output).toContain('<div class="callout-title">Pro Tip</div>');
 		expect(output).toContain('<div class="callout-content">');
 		expect(output).toContain("Body text");
 		expect(output).toContain("</div></div>");
@@ -713,6 +957,20 @@ describe("tag regex", () => {
 		expect(output).not.toContain("/tags/section");
 	});
 });
+describe("unicode tag regex", () => {
+	test("rewrites Unicode letter and emoji tags", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableTagLinking: true,
+		});
+		const file = await processor.process({
+			value: "#δοκιμή #🚀",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		expect(String(file)).toContain("[#δοκιμή](/tags/δοκιμή)");
+		expect(String(file)).toContain("[#🚀](/tags/🚀)");
+	});
+});
 
 describe("callout foldable state", () => {
 	test("renders static callout as div", async () => {
@@ -722,7 +980,9 @@ describe("callout foldable state", () => {
 			path: path.resolve(fixtureRoot, "index.md"),
 		});
 		const output = String(file);
-		expect(output).toContain('<div class="callout callout-note">');
+		expect(output).toContain(
+			'<div class="callout callout-note" data-callout="note">',
+		);
 		expect(output).not.toContain("<details");
 	});
 
@@ -733,7 +993,9 @@ describe("callout foldable state", () => {
 			path: path.resolve(fixtureRoot, "index.md"),
 		});
 		const output = String(file);
-		expect(output).toContain('<details class="callout callout-note">');
+		expect(output).toContain(
+			'<details class="callout callout-note" data-callout="note">',
+		);
 		expect(output).toContain("<summary");
 		expect(output).not.toContain("open");
 	});
@@ -745,7 +1007,9 @@ describe("callout foldable state", () => {
 			path: path.resolve(fixtureRoot, "index.md"),
 		});
 		const output = String(file);
-		expect(output).toContain('<details class="callout callout-tip" open>');
+		expect(output).toContain(
+			'<details class="callout callout-tip" data-callout="tip" open>',
+		);
 		expect(output).toContain("<summary");
 	});
 });
@@ -898,6 +1162,18 @@ describe("footnote fixes", () => {
 		});
 		const output = String(file);
 		expect(output).toContain('title="Def text."');
+	});
+
+	test("supports indented multi-line definitions", async () => {
+		const processor = makeProcessor(fixtureRoot);
+		const file = await processor.process({
+			value: "Reference[^long].\n\n[^long]: First line.\n  Second line.",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain("First line. Second line.");
+		expect(output).not.toContain("Second line.</p>");
 	});
 
 	test("multiple definitions all stripped and all rendered in list", async () => {
@@ -1081,8 +1357,8 @@ describe("nested callouts", () => {
 		const output = String(file);
 		expect(output).toContain('class="callout callout-note"');
 		expect(output).toContain('class="callout callout-tip"');
-		expect(output).toContain("📝 Outer");
-		expect(output).toContain("💡 Inner");
+		expect(output).toContain('<div class="callout-title">Outer</div>');
+		expect(output).toContain('<div class="callout-title">Inner</div>');
 		expect(output).toContain("Content");
 		// Inner callout must be nested inside outer (appear after outer's opening tag)
 		const outerIdx = output.indexOf("callout-note");
@@ -1117,7 +1393,9 @@ describe("nested callouts", () => {
 		});
 		const output = String(file);
 		expect(output).toContain('<details class="callout callout-note"');
-		expect(output).toContain('<details class="callout callout-tip" open');
+		expect(output).toContain(
+			'<details class="callout callout-tip" data-callout="tip" open',
+		);
 		expect(output).toContain("Collapsed outer");
 		expect(output).toContain("Expanded inner");
 	});
@@ -1321,6 +1599,47 @@ describe("media embeds", () => {
 		expect(String(file)).toContain('<img src="/image.png" alt="image.png"');
 		expect(file.messages).toHaveLength(1);
 		expect(String(file.messages[0])).toContain('Image "image.png" not found');
+	});
+	test("resolves attachment wikilinks", async () => {
+		const processor = makeProcessor(assetsFixtureRoot);
+		const file = await processor.process({
+			value: "[[image.png]]",
+			path: path.resolve(assetsFixtureRoot, "index.md"),
+		});
+
+		expect(String(file)).toContain("[image.png](/image.png)");
+	});
+
+	test("supports PDF page and height fragments", async () => {
+		const processor = makeProcessor(assetsFixtureRoot, {
+			enableMediaEmbeds: true,
+		});
+		const file = await processor.process({
+			value: "![[Document.pdf#page=3]]\n\n![[Document.pdf#height=400]]",
+			path: path.resolve(assetsFixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain(
+			'<iframe src="/Document.pdf#page=3" width="100%" height="600px"',
+		);
+		expect(output).toContain(
+			'<iframe src="/Document.pdf#height=400" width="100%" height="400px"',
+		);
+	});
+
+	test("preserves image fragments", async () => {
+		const processor = makeProcessor(assetsFixtureRoot, {
+			enableMediaEmbeds: true,
+		});
+		const file = await processor.process({
+			value: "![[image.png#outline|100]]",
+			path: path.resolve(assetsFixtureRoot, "index.md"),
+		});
+
+		expect(String(file)).toContain(
+			'<img src="/image.png#outline" alt="image.png" width="100"',
+		);
 	});
 });
 
@@ -1556,7 +1875,7 @@ describe("bundled stylesheet", () => {
 		expect(sourceStyles).toContain(".obsidian-backlinks");
 		expect(sourceStyles).toContain(".obsidian-transclusion");
 		expect(sourceStyles).toContain(".obsidian-embed");
-		expect(sourceStyles).toContain('html[theme="dark"]');
+		expect(sourceStyles).toContain("html.dark");
 		expect(sourceStyles).toContain("callout-note");
 		expect(sourceStyles).toContain("callout-tip");
 		expect(sourceStyles).toContain("callout-warning");
@@ -1564,7 +1883,7 @@ describe("bundled stylesheet", () => {
 		expect(sourceStyles).toContain("callout-quote");
 		expect(distStyles.length).toBeGreaterThan(0);
 		expect(distStyles).toContain(".callout");
-		expect(distStyles).toContain('html[theme="dark"]');
+		expect(distStyles).toContain("html.dark");
 	});
 });
 

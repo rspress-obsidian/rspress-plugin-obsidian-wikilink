@@ -4,22 +4,54 @@
 
 /* ─── Callouts ─────────────────────────────────────────────────────────── */
 
-.callout {
-	border-left: 4px solid var(--callout-color, #888);
-	border-radius: 4px;
+.callout,
+.rp-callout {
+	--callout-surface: var(--rp-c-bg-soft, #f7f8fa);
+	--callout-border: color-mix(
+		in srgb,
+		var(--callout-color, #77809a) 30%,
+		var(--rp-c-divider-light, #d9deea)
+	);
+	position: relative;
 	margin: 1rem 0;
-	padding: 0;
-	background: var(--callout-bg, rgba(128, 128, 128, 0.08));
+	border: 1px solid var(--callout-border);
+	border-left: 4px solid var(--callout-color, #77809a);
+	border-radius: 8px;
+	box-shadow: none;
 	overflow: hidden;
 }
 
-.callout-title {
+.callout-title,
+.rp-callout__title {
 	display: flex;
 	align-items: center;
-	gap: 0.4em;
-	padding: 0.5rem 0.75rem;
-	font-weight: 600;
-	background: var(--callout-title-bg, rgba(128, 128, 128, 0.12));
+	gap: 0.55rem;
+	min-height: 2.35rem;
+	padding: 0.55rem 0.8rem;
+	color: var(--rp-c-text-1, #1f2937);
+	font-size: 0.92rem;
+	font-weight: 700;
+	line-height: 1.4;
+	letter-spacing: 0.01em;
+	background: var(
+		--callout-title-bg,
+		color-mix(
+			in srgb,
+			var(--callout-color, #77809a) 12%,
+			var(--callout-surface)
+		)
+	);
+	border-bottom: 1px solid
+		color-mix(in srgb, var(--callout-color, #77809a) 22%, transparent);
+}
+
+.callout-title::before {
+	width: 0.45rem;
+	height: 0.45rem;
+	flex: 0 0 auto;
+	border-radius: 50%;
+	background: var(--callout-color, #77809a);
+	content: "";
 }
 
 /* <details> foldable callouts — summary doubles as the title bar */
@@ -33,14 +65,34 @@ details.callout > summary.callout-title::-webkit-details-marker {
 	display: none;
 }
 
-.callout-content {
-	padding: 0.5rem 0.75rem;
+details.callout > summary.callout-title::after {
+	width: 0.45rem;
+	height: 0.45rem;
+	margin-left: auto;
+	border-right: 1.5px solid currentColor;
+	border-bottom: 1.5px solid currentColor;
+	content: "";
+	transform: rotate(45deg) translateY(-2px);
+	transition: transform 160ms ease;
 }
 
-.callout-content > *:first-child {
+details.callout[open] > summary.callout-title::after {
+	transform: rotate(225deg) translate(-1px, -2px);
+}
+.callout-content,
+.rp-callout__content {
+	padding: 0.7rem 0.8rem 0.8rem;
+	color: var(--rp-c-text-2, #4b5563);
+	font-size: 0.95rem;
+	line-height: 1.6;
+}
+
+.callout-content > *:first-child,
+.rp-callout__content > *:first-child {
 	margin-top: 0;
 }
-.callout-content > *:last-child {
+.callout-content > *:last-child,
+.rp-callout__content > *:last-child {
 	margin-bottom: 0;
 }
 
@@ -111,66 +163,127 @@ details.callout > summary.callout-title::-webkit-details-marker {
 	--callout-title-bg: rgba(158, 158, 158, 0.12);
 }
 
+.rp-callout--note {
+	--callout-color: #448aff;
+	--callout-bg: rgba(68, 138, 255, 0.07);
+	--callout-title-bg: rgba(68, 138, 255, 0.12);
+}
+.rp-callout--tip {
+	--callout-color: #00bfa5;
+	--callout-bg: rgba(0, 191, 165, 0.07);
+	--callout-title-bg: rgba(0, 191, 165, 0.12);
+}
+.rp-callout--info {
+	--callout-color: #00b0ff;
+	--callout-bg: rgba(0, 176, 255, 0.07);
+	--callout-title-bg: rgba(0, 176, 255, 0.12);
+}
+.rp-callout--success {
+	--callout-color: #00c853;
+	--callout-bg: rgba(0, 200, 83, 0.07);
+	--callout-title-bg: rgba(0, 200, 83, 0.12);
+}
+.rp-callout--question {
+	--callout-color: #64dd17;
+	--callout-bg: rgba(100, 221, 23, 0.07);
+	--callout-title-bg: rgba(100, 221, 23, 0.12);
+}
+.rp-callout--warning,
+.rp-callout--caution {
+	--callout-color: #ff9100;
+	--callout-bg: rgba(255, 145, 0, 0.07);
+	--callout-title-bg: rgba(255, 145, 0, 0.12);
+}
+.rp-callout--danger,
+.rp-callout--failure {
+	--callout-color: #ff1744;
+	--callout-bg: rgba(255, 23, 68, 0.07);
+	--callout-title-bg: rgba(255, 23, 68, 0.12);
+}
+.rp-callout--bug {
+	--callout-color: #f50057;
+	--callout-bg: rgba(245, 0, 87, 0.07);
+	--callout-title-bg: rgba(245, 0, 87, 0.12);
+}
+.rp-callout--example {
+	--callout-color: #7c4dff;
+	--callout-bg: rgba(124, 77, 255, 0.07);
+	--callout-title-bg: rgba(124, 77, 255, 0.12);
+}
+.rp-callout--abstract {
+	--callout-color: #00b0ff;
+	--callout-bg: rgba(0, 176, 255, 0.07);
+	--callout-title-bg: rgba(0, 176, 255, 0.12);
+}
+.rp-callout--quote {
+	--callout-color: #9e9e9e;
+	--callout-bg: rgba(158, 158, 158, 0.07);
+	--callout-title-bg: rgba(158, 158, 158, 0.12);
+}
+
+.rp-callout__title::before {
+	width: 0.45rem;
+	height: 0.45rem;
+	flex: 0 0 auto;
+	border-radius: 50%;
+	background: var(--callout-color, #77809a);
+	content: "";
+}
+
+/* Rspress ships its own callout component. Match it to the plugin cards. */
+.rp-callout.rp-callout {
+	margin: 1rem 0;
+	padding: 0;
+	border: 1px solid var(--callout-border);
+	border-left: 4px solid var(--callout-color, #77809a);
+	border-radius: 8px;
+	box-shadow: none;
+	overflow: hidden;
+}
+
+.rp-callout.rp-callout .rp-callout__title {
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+	min-height: 2.35rem;
+	padding: 0.55rem 0.8rem;
+	font-size: 0.92rem;
+	font-weight: 700;
+	line-height: 1.4;
+	letter-spacing: 0.01em;
+	background: var(--callout-title-bg, var(--callout-surface));
+	border-bottom: 1px solid
+		color-mix(in srgb, var(--callout-color, #77809a) 22%, transparent);
+}
+
+.rp-callout.rp-callout .rp-callout__content {
+	padding: 0.7rem 0.8rem 0.8rem;
+	color: var(--rp-c-text-2, #4b5563);
+	font-size: 0.95rem;
+	line-height: 1.6;
+}
+
 /* ─── Dark mode ─────────────────────────────────────────────────────────── */
-/* Rspress sets html[theme="dark"] when dark mode is active. The default
-   callout background opacities (7% / 12%) are too subtle on dark backgrounds,
-   so we bump them to ~16% / 24% for better visibility. */
 
-html[theme="dark"] .callout {
-	background: var(--callout-bg, rgba(128, 128, 128, 0.16));
+html.dark .callout,
+html.dark .rp-callout {
+	--callout-surface: var(--rp-c-bg-soft, #171a21);
+	--callout-bg: color-mix(
+		in srgb,
+		var(--callout-color, #9aa4b2) 12%,
+		var(--callout-surface)
+	);
+	--callout-title-bg: color-mix(
+		in srgb,
+		var(--callout-color, #9aa4b2) 20%,
+		var(--callout-surface)
+	);
+	--callout-border: color-mix(
+		in srgb,
+		var(--callout-color, #9aa4b2) 38%,
+		var(--rp-c-divider, #303642)
+	);
 }
-
-html[theme="dark"] .callout-title {
-	background: var(--callout-title-bg, rgba(128, 128, 128, 0.24));
-}
-
-html[theme="dark"] .callout-note {
-	--callout-bg: rgba(68, 138, 255, 0.16);
-	--callout-title-bg: rgba(68, 138, 255, 0.24);
-}
-html[theme="dark"] .callout-tip {
-	--callout-bg: rgba(0, 191, 165, 0.16);
-	--callout-title-bg: rgba(0, 191, 165, 0.24);
-}
-html[theme="dark"] .callout-info {
-	--callout-bg: rgba(0, 176, 255, 0.16);
-	--callout-title-bg: rgba(0, 176, 255, 0.24);
-}
-html[theme="dark"] .callout-success {
-	--callout-bg: rgba(0, 200, 83, 0.16);
-	--callout-title-bg: rgba(0, 200, 83, 0.24);
-}
-html[theme="dark"] .callout-question {
-	--callout-bg: rgba(100, 221, 23, 0.16);
-	--callout-title-bg: rgba(100, 221, 23, 0.24);
-}
-html[theme="dark"] .callout-warning,
-html[theme="dark"] .callout-caution {
-	--callout-bg: rgba(255, 145, 0, 0.16);
-	--callout-title-bg: rgba(255, 145, 0, 0.24);
-}
-html[theme="dark"] .callout-danger,
-html[theme="dark"] .callout-failure {
-	--callout-bg: rgba(255, 23, 68, 0.16);
-	--callout-title-bg: rgba(255, 23, 68, 0.24);
-}
-html[theme="dark"] .callout-bug {
-	--callout-bg: rgba(245, 0, 87, 0.16);
-	--callout-title-bg: rgba(245, 0, 87, 0.24);
-}
-html[theme="dark"] .callout-example {
-	--callout-bg: rgba(124, 77, 255, 0.16);
-	--callout-title-bg: rgba(124, 77, 255, 0.24);
-}
-html[theme="dark"] .callout-abstract {
-	--callout-bg: rgba(0, 176, 255, 0.16);
-	--callout-title-bg: rgba(0, 176, 255, 0.24);
-}
-html[theme="dark"] .callout-quote {
-	--callout-bg: rgba(158, 158, 158, 0.16);
-	--callout-title-bg: rgba(158, 158, 158, 0.24);
-}
-
 /* ─── Backlinks panel ───────────────────────────────────────────────────── */
 
 .obsidian-backlinks {
@@ -215,19 +328,54 @@ html[theme="dark"] .callout-quote {
 /* ─── Transclusion wrapper ──────────────────────────────────────────────── */
 
 .obsidian-transclusion {
+	margin: 1.25rem 0;
+	border: 1px solid
+		color-mix(
+			in srgb,
+			var(--rp-c-brand, #448aff) 28%,
+			var(--rp-c-divider, #d9deea)
+		);
 	border-left: 3px solid var(--rp-c-brand, #448aff);
-	padding: 0.75rem 1rem;
-	margin: 1rem 0;
-	border-radius: 0 4px 4px 0;
-	background: var(--rp-c-bg-soft, #f9f9f9);
-	font-size: 0.95em;
+	border-radius: 12px;
+	background: color-mix(
+		in srgb,
+		var(--rp-c-brand, #448aff) 4%,
+		var(--rp-c-bg-soft, #f9f9f9)
+	);
+	box-shadow:
+		0 1px 2px rgb(15 23 42 / 5%),
+		0 8px 24px rgb(15 23 42 / 5%);
+	overflow: hidden;
+	font-size: 1rem;
+	line-height: 1.75;
+}
+
+.obsidian-transclusion > h1,
+.obsidian-transclusion > h2,
+.obsidian-transclusion > h3 {
+	margin: 0;
+	padding: 1rem 1.1rem 0.75rem;
+	border-bottom: 1px solid
+		color-mix(in srgb, var(--rp-c-brand, #448aff) 18%, transparent);
+	font-size: 1.25rem;
+	line-height: 1.35;
+}
+
+.obsidian-transclusion > p {
+	margin: 0.8rem 1.1rem;
+}
+
+.obsidian-transclusion > .rp-table-scroll-container {
+	margin: 0.75rem;
+	border-radius: 8px;
 }
 
 .obsidian-transclusion > *:first-child {
 	margin-top: 0;
 }
+
 .obsidian-transclusion > *:last-child {
-	margin-bottom: 0;
+	margin-bottom: 0.75rem;
 }
 
 /* ─── Embed anchor (non-media ![[Page]]) ────────────────────────────────── */

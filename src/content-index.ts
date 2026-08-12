@@ -7,13 +7,20 @@ import { normalizeLookupValue, stripMarkdownFormatting } from "./slug.ts";
 import type {
 	BacklinkRef,
 	BlockEntry,
+	ContentAsset,
 	ContentIndex,
 	ContentPage,
 	HeadingEntry,
 } from "./types.ts";
-import { normalizeFsPath, normalizePathKey } from "./utils.ts";
+import {
+	normalizeFsPath,
+	normalizePathKey,
+	resolveRelativePathKey,
+} from "./utils.ts";
 
 const MARKDOWN_EXTENSIONS = new Set([".md", ".mdx"]);
+const INLINE_TAG_PATTERN =
+	/(?<![/\p{L}\p{N}_-])#([\p{L}\p{M}\p{N}\p{Extended_Pictographic}_/-]+)/gu;
 
 /** Maximum number of content indexes to cache simultaneously. Beyond this
  *  the least-recently-used entry is evicted. Rspress dev-server uses a single
@@ -39,29 +46,26 @@ interface MarkdownFileEntry {
 }
 
 /**
- * Scan `rootDir` for `.md`/`.mdx` files and build a fresh {@link ContentIndex}
- * with pre-computed lookup tables (by path, basename, title, alias, tag).
- * Always bypasses the module-level cache — prefer {@link getCachedContentIndex}
- * for repeated builds.
+ * Scan `rootDir` for Markdown pages and attachment files, then build a fresh
+ * {@link ContentIndex} with pre-computed lookup tables.
  */
 export async function buildContentIndex(
 	rootDir: string,
 ): Promise<ContentIndex> {
 	const absoluteRoot = path.resolve(rootDir);
-	const files = scanMarkdownFiles(absoluteRoot);
+	const files = scanVaultFiles(absoluteRoot);
 	return buildContentIndexFromFiles(absoluteRoot, files);
 }
 
 /**
  * Like {@link buildContentIndex} but memoized on a per-root basis. The cache
- * is invalidated whenever the set of markdown files, their mtimes, or sizes
- * change — safe for Rspress dev-server file-watching.
+ * is invalidated whenever any routable file changes.
  */
 export async function getCachedContentIndex(
 	rootDir: string,
 ): Promise<ContentIndex> {
 	const absoluteRoot = path.resolve(rootDir);
-	const files = scanMarkdownFiles(absoluteRoot);
+	const files = scanVaultFiles(absoluteRoot);
 	const signature = files
 		.map((file) => `${file.relativePath}:${file.mtimeMs}:${file.size}`)
 		.join("|");
@@ -92,8 +96,11 @@ async function buildContentIndexFromFiles(
 	rootDir: string,
 	files: MarkdownFileEntry[],
 ): Promise<ContentIndex> {
+	const markdownFiles = files.filter((file) =>
+		MARKDOWN_EXTENSIONS.has(path.extname(file.relativePath).toLowerCase()),
+	);
 	const settled = await Promise.allSettled(
-		files.map((file) => buildContentPage(file)),
+		markdownFiles.map((file) => buildContentPage(file)),
 	);
 	const pages: ContentPage[] = [];
 	const rawContentByPath = new Map<string, string>();
@@ -112,12 +119,29 @@ async function buildContentIndexFromFiles(
 			);
 		}
 	}
+	const assets: ContentAsset[] = files
+		.filter(
+			(file) =>
+				!MARKDOWN_EXTENSIONS.has(path.extname(file.relativePath).toLowerCase()),
+		)
+		.map((file) => ({
+			absolutePath: file.absolutePath,
+			relativePath: file.relativePath,
+			pathKey: normalizePathKey(file.relativePath),
+			baseName: path.basename(normalizePathKey(file.relativePath)),
+			urlPath: `/${file.relativePath
+				.split("/")
+				.map((segment) => encodeURIComponent(segment))
+				.join("/")}`,
+		}));
 	const byAbsolutePath = new Map<string, ContentPage>();
 	const byPathKey = new Map<string, ContentPage>();
 	const byBaseName = new Map<string, ContentPage[]>();
 	const byTitle = new Map<string, ContentPage[]>();
 	const byAlias = new Map<string, ContentPage[]>();
 	const byTag = new Map<string, ContentPage[]>();
+	const byAssetPath = new Map<string, ContentAsset>();
+	const byAssetBaseName = new Map<string, ContentAsset[]>();
 	const byPathKeyCI = new Map<string, ContentPage[]>();
 	const byBaseNameCI = new Map<string, ContentPage[]>();
 
@@ -154,6 +178,12 @@ async function buildContentIndexFromFiles(
 			}
 		}
 	}
+	for (const asset of assets) {
+		byAssetPath.set(asset.pathKey, asset);
+		const existing = byAssetBaseName.get(asset.baseName) ?? [];
+		existing.push(asset);
+		byAssetBaseName.set(asset.baseName, existing);
+	}
 
 	const backlinks = new Map<string, BacklinkRef[]>();
 	for (const page of pages) {
@@ -164,6 +194,7 @@ async function buildContentIndexFromFiles(
 				byBaseName,
 				byBaseNameCI,
 				normalizedTarget,
+				page,
 			);
 			for (const candidate of resolved) {
 				if (candidate.absolutePath === page.absolutePath) continue;
@@ -175,30 +206,28 @@ async function buildContentIndexFromFiles(
 	return {
 		rootDir,
 		pages,
+		assets,
 		byAbsolutePath,
 		byPathKey,
 		byBaseName,
 		byTitle,
 		byAlias,
 		byTag,
+		byAssetPath,
+		byAssetBaseName,
 		byPathKeyCI,
 		byBaseNameCI,
 		rawContentByPath,
 		backlinks,
 	};
 }
-
-/**
- * Resolve a normalized wikilink target against the completed lookup maps.
- * Mirrors the logic in {@link buildBacklinksIndex} but works with raw maps
- * rather than a ContentIndex wrapper.
- */
 function resolveBacklinkTarget(
 	byPathKey: Map<string, ContentPage>,
 	byPathKeyCI: Map<string, ContentPage[]>,
 	byBaseName: Map<string, ContentPage[]>,
 	byBaseNameCI: Map<string, ContentPage[]>,
 	normalizedTarget: string,
+	sourcePage: ContentPage,
 ): ContentPage[] {
 	const seen = new Set<string>();
 	const results: ContentPage[] = [];
@@ -213,6 +242,24 @@ function resolveBacklinkTarget(
 	const exactPage = byPathKey.get(normalizedTarget);
 	if (exactPage) {
 		addPage(exactPage);
+		return results;
+	}
+
+	const relativePathKey = resolveRelativePathKey(
+		sourcePage.relativePath,
+		normalizedTarget,
+	);
+	if (relativePathKey !== undefined) {
+		const relativePage = byPathKey.get(relativePathKey);
+		if (relativePage) {
+			addPage(relativePage);
+			return results;
+		}
+
+		for (const candidate of byPathKeyCI.get(relativePathKey.toLowerCase()) ??
+			[]) {
+			addPage(candidate);
+		}
 		return results;
 	}
 
@@ -260,7 +307,7 @@ function addBacklinkEntry(
 	}
 }
 
-function scanMarkdownFiles(rootDir: string): MarkdownFileEntry[] {
+function scanVaultFiles(rootDir: string): MarkdownFileEntry[] {
 	const results: MarkdownFileEntry[] = [];
 	const queue = [rootDir];
 
@@ -289,10 +336,6 @@ function scanMarkdownFiles(rootDir: string): MarkdownFileEntry[] {
 			}
 
 			if (!entry.isFile()) {
-				continue;
-			}
-
-			if (!MARKDOWN_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
 				continue;
 			}
 
@@ -336,7 +379,9 @@ async function buildContentPage(file: MarkdownFileEntry): Promise<{
 
 	const lines = markdown.split(/\r?\n/);
 	const isContent = getContentLineFlags(lines);
-
+	const allTags = [
+		...new Set([...tags, ...extractInlineTags(lines, isContent)]),
+	];
 	const headings = extractHeadings(lines, isContent);
 
 	// Pre-extract wikilink targets while we have the raw content in memory.
@@ -346,7 +391,10 @@ async function buildContentPage(file: MarkdownFileEntry): Promise<{
 	const headingByText = new Map<string, HeadingEntry>();
 	for (const h of headings) {
 		headingBySlug.set(h.slug, h);
-		if (h.explicitId) headingBySlug.set(h.explicitId, h);
+		if (h.explicitId) {
+			headingBySlug.set(h.explicitId, h);
+			headingBySlug.set(normalizeLookupValue(h.explicitId), h);
+		}
 		headingByText.set(normalizeLookupValue(h.rawText), h);
 	}
 
@@ -354,13 +402,13 @@ async function buildContentPage(file: MarkdownFileEntry): Promise<{
 
 	const page: ContentPage = {
 		absolutePath: file.absolutePath,
+		title,
 		relativePath: file.relativePath,
 		routePath,
 		pathKey,
 		baseName,
-		title,
+		tags: allTags,
 		aliases,
-		tags,
 		cssclasses,
 		excerpt,
 		publish,
@@ -545,6 +593,21 @@ function extractWikilinkTargets(markdown: string): string[] {
 	}
 
 	return targets;
+}
+function extractInlineTags(lines: string[], isContent: boolean[]): string[] {
+	const tags = new Set<string>();
+
+	for (let index = 0; index < lines.length; index += 1) {
+		if (!isContent[index]) continue;
+		for (const match of (lines[index] ?? "").matchAll(INLINE_TAG_PATTERN)) {
+			const tag = (match[1] ?? "").replace(/\/+$/, "");
+			if (tag && !/^[\p{N}/-]+$/u.test(tag)) {
+				tags.add(tag);
+			}
+		}
+	}
+
+	return [...tags];
 }
 
 function pushBlock(blocks: BlockEntry[], seen: Set<string>, id: string): void {

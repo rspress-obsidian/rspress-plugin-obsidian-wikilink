@@ -75,9 +75,10 @@
 	"dependencies": {
 		"github-slugger": "^2.0.0",
 		"gray-matter": "^4.0.3",
+		"rehype-stringify": "^10.0.0",
+		"remark-gfm": "^4.0.1",
 		"remark-parse": "^11.0.0",
 		"remark-rehype": "^11.1.0",
-		"rehype-stringify": "^10.0.0",
 		"unified": "^11.0.5"
 	},
 	"devDependencies": {

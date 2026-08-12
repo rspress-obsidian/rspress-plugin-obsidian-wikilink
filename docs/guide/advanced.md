@@ -86,22 +86,22 @@ Produces `/tags/tutorial` and `/tags/obsidian`, each listing all pages tagged wi
 
 **Supported base types:**
 
-| Type | Icon |
-|------|------|
-| `note` | 📝 |
-| `tip` | 💡 |
-| `info` | ℹ️ |
-| `todo` | ☑️ |
-| `success` | ✅ |
-| `question` | ❓ |
-| `warning` | ⚠️ |
-| `danger` | 🚨 |
-| `bug` | 🐛 |
-| `example` | 📋 |
-| `quote` | 📜 |
-| `abstract` | 📋 |
-| `caution` | ⚠️ |
-| `failure` | ❌ |
+| Type | Visual treatment |
+|------|------------------|
+| `note` | Blue accent |
+| `tip` | Teal accent |
+| `info` | Cyan accent |
+| `todo` | Green accent |
+| `success` | Green accent |
+| `question` | Lime accent |
+| `warning` | Orange accent |
+| `danger` | Red accent |
+| `bug` | Pink accent |
+| `example` | Purple accent |
+| `quote` | Neutral accent |
+| `abstract` | Cyan accent |
+| `caution` | Orange accent |
+| `failure` | Red accent |
 
 **Supported aliases** (map to canonical type above):
 
@@ -125,7 +125,7 @@ Produces `/tags/tutorial` and `/tags/obsidian`, each listing all pages tagged wi
 Output:
 ```html
 <div class="callout callout-warning">
-  <div class="callout-title">⚠️ Watch out</div>
+  <div class="callout-title">Watch out</div>
   <div class="callout-content">This will be transformed.</div>
 </div>
 ```
@@ -272,13 +272,17 @@ Inline footnote^[This is inline] works differently.
 
 Resolution order for `[[target]]`:
 
-1. **Exact path** — `[[guide/getting-started]]`
-2. **Unique basename** — `[[getting-started]]` (one page matches)
-3. **Frontmatter `title`** — `[[Onboarding Guide]]` (unique match)
-4. **Frontmatter `aliases`** — `[[Start Here]]` (unique match)
-5. **Fuzzy matching** — (when `enableFuzzyMatching` is on) case-insensitive, shortest-suffix
-6. **Case-insensitive** — (when `enableCaseInsensitiveLookup` is on)
-7. **Rejected** — broken or ambiguous
+1. **Explicitly relative path** — `[[../shared/Concept]]`, resolved from the current note
+2. **Exact vault path** — `[[guide/getting-started]]`
+3. **Unique basename** — `[[getting-started]]` (one page matches)
+4. **Frontmatter `title`** — `[[Onboarding Guide]]` (unique match)
+5. **Frontmatter `aliases`** — `[[Start Here]]` (unique match)
+6. **Fuzzy matching** — (when `enableFuzzyMatching` is on) case-insensitive, shortest-suffix
+7. **Case-insensitive** — (when `enableCaseInsensitiveLookup` is on)
+8. **Rejected** — broken or ambiguous
+
+Explicit `./` and `../` paths do not fall back to basename or metadata lookup when
+their target is missing.
 
 ## Heading Resolution
 
@@ -290,6 +294,10 @@ Supported heading formats in target files:
 - Setext H1: `Heading\n=======`
 - Setext H2: `Heading\n-------`
 - Explicit IDs: `## Heading {#custom-anchor}`
+
+Heading anchors use Rspress-compatible GitHub slugging. Unicode letters are
+preserved, duplicate headings receive `-1`, `-2`, and explicit IDs take
+precedence over generated slugs.
 
 ## Block ID Formats
 

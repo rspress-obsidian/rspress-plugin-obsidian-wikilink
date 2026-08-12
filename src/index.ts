@@ -30,6 +30,7 @@ export {
 } from "./tag-pages.ts";
 export type {
 	BlockEntry,
+	ContentAsset,
 	ContentIndex,
 	ContentPage,
 	DiagnosticMode,

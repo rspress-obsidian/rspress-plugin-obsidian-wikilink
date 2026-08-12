@@ -79,8 +79,10 @@ export interface NormalizedPluginOptions {
 }
 
 /**
- * A parsed subpath fragment extracted from a wikilink target (the part
- * after `#`). Headings point to a heading slug, blocks to a `^block-id`.
+ * A fragment extracted from a wikilink target.
+ *
+ * Heading fragments may contain multiple `#`-separated levels because
+ * Obsidian supports links such as `[[Page#Heading#Subheading]]`.
  */
 export interface WikiSubpath {
 	kind: "heading" | "block";
@@ -91,7 +93,7 @@ export interface WikiSubpath {
 export interface ParsedWikiLink {
 	/** Original source text, including `[[...]]` or `![[...]]` delimiters. */
 	raw: string;
-	/** The target page reference (empty when the link references the current page). */
+	/** The target page or attachment reference. */
 	target: string;
 	/** Optional alias text after `|`. */
 	alias?: string;
@@ -99,6 +101,8 @@ export interface ParsedWikiLink {
 	isEmbed: boolean;
 	/** Heading or block scope fragment after `#`, if any. */
 	subpath?: WikiSubpath;
+	/** Vault-wide search syntax (`[[## heading]]` or `[[^^block]]`). */
+	search?: "heading" | "block";
 	/** `true` for `[[#Heading]]` style links that stay on the current page. */
 	isCurrentPageReference: boolean;
 }
@@ -125,6 +129,15 @@ export interface HeadingEntry {
 /** A single block anchor indexed from a page. */
 export interface BlockEntry {
 	id: string;
+}
+
+/** A non-Markdown file that can be addressed by an Obsidian wikilink. */
+export interface ContentAsset {
+	absolutePath: string;
+	relativePath: string;
+	pathKey: string;
+	baseName: string;
+	urlPath: string;
 }
 
 /** The normalized, searchable representation of a single docs page. */
@@ -158,12 +171,15 @@ export interface ContentPage {
 export interface ContentIndex {
 	rootDir: string;
 	pages: ContentPage[];
+	assets: ContentAsset[];
 	byAbsolutePath: Map<string, ContentPage>;
 	byPathKey: Map<string, ContentPage>;
 	byBaseName: Map<string, ContentPage[]>;
 	byTitle: Map<string, ContentPage[]>;
 	byAlias: Map<string, ContentPage[]>;
 	byTag: Map<string, ContentPage[]>;
+	byAssetPath: Map<string, ContentAsset>;
+	byAssetBaseName: Map<string, ContentAsset[]>;
 	/** Case-insensitive pathKey → pages lookup. Populated when `enableFuzzyMatching` is available. */
 	byPathKeyCI: Map<string, ContentPage[]>;
 	/** Case-insensitive basename → pages lookup. Populated when `enableCaseInsensitiveLookup` is available. */
