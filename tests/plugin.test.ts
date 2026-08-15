@@ -675,6 +675,25 @@ describe("remarkWikilink", () => {
 		);
 	});
 
+	test("emits anchors for block IDs on the page", async () => {
+		const processor = makeProcessor(inlineBlocksFixtureRoot);
+
+		const file = await processor.process({
+			value: [
+				"# Inline Blocks",
+				"",
+				"^standalone-block",
+				"",
+				"A paragraph with an inline block ID. ^inline-block",
+			].join("\n"),
+			path: path.resolve(inlineBlocksFixtureRoot, "guide/inline-target.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain('id="^standalone-block"');
+		expect(output).toContain('id="^inline-block"');
+	});
+
 	test("rewrites embeds into embed html anchors", async () => {
 		const processor = makeProcessor(fixtureRoot);
 
@@ -743,6 +762,21 @@ describe("transclusion", () => {
 		expect(output).toContain("Install steps");
 	});
 
+	test("transcludes full block content including nested list items", async () => {
+		const processor = makeProcessor(inlineBlocksFixtureRoot, {
+			enableTransclusion: true,
+		});
+		const file = await processor.process({
+			value: "![[guide/list-block#^parent-block]]",
+			path: path.resolve(inlineBlocksFixtureRoot, "index.md"),
+		});
+		const output = String(file);
+		expect(output).toContain('class="obsidian-transclusion"');
+		expect(output).toContain("Parent item one");
+		expect(output).toContain("Child item A");
+		expect(output).toContain("Child item B");
+		expect(output).not.toContain("Sibling item after the block");
+	});
 	test("recursively transcludes nested embeds", async () => {
 		const processor = makeProcessor(recursiveTransclusionFixtureRoot, {
 			enableTransclusion: true,
@@ -920,6 +954,13 @@ describe("backlinks caching", () => {
 		const second = await getCachedBacklinksIndex(index);
 
 		expect(second).toBe(first);
+	});
+
+	test("records backlinks for alias and title wikilinks", async () => {
+		const index = await buildContentIndex(aliasFixtureRoot);
+		const backlinks = index.backlinks.get("/guide/getting-started");
+
+		expect(backlinks).toEqual([{ routePath: "/", title: "" }]);
 	});
 });
 
@@ -1134,6 +1175,46 @@ describe("tag page generation", () => {
 		const tutorialPage = pages.find((p) => p.routePath === "/tags/tutorial");
 		expect(tutorialPage?.content).toContain("Tagged Guide");
 		expect(tutorialPage?.content).toContain("/guide/tagged-page");
+	});
+
+	test("escapes title brackets in generated tag page links", async () => {
+		const { generateTagPages } = await import("../src/tag-pages");
+		const index = await buildContentIndex(tagsFixtureRoot);
+		// Simulate a page whose title would break out of a markdown link.
+		const hostile = index.pages[0];
+		if (hostile) {
+			hostile.title = "evil](https://evil.example) [x";
+		}
+		const pages = generateTagPages(index);
+		const tutorialPage = pages.find((p) => p.routePath === "/tags/tutorial");
+
+		// The label's brackets are escaped, so no raw `[...](...)` break-out
+		// remains and the real link destination is preserved.
+		expect(tutorialPage?.content).not.toContain("[evil](");
+		expect(tutorialPage?.content).toContain("evil\\]");
+		expect(tutorialPage?.content).toContain("](/guide/tagged-page)");
+	});
+
+	test("escapes newlines and HTML in tag display names", async () => {
+		const { generateTagPages } = await import("../src/tag-pages");
+		const index = await buildContentIndex(tagsFixtureRoot);
+		// Simulate a frontmatter tag containing a newline + HTML.
+		const page = index.pages[0];
+		if (page) {
+			page.tags = ['evil"<script>\nalert(1)</script>'];
+		}
+		const pages = generateTagPages(index);
+		const hostile = pages.find((p) =>
+			p.routePath.includes("evil%22%3Cscript%3E"),
+		);
+
+		// The heading must be entity-escaped, never raw HTML. The quote is
+		// harmless in text-node context and correctly left literal.
+		expect(hostile?.content).toContain('# #evil"&lt;script&gt;');
+		expect(hostile?.content).toContain("&lt;/script&gt;");
+		expect(hostile?.content).not.toContain("# <script>");
+		// The YAML scalar must not contain a literal line break (escaped \n).
+		expect(hostile?.content).toContain("\\nalert(1)");
 	});
 });
 
@@ -1641,6 +1722,20 @@ describe("media embeds", () => {
 			'<img src="/image.png#outline" alt="image.png" width="100"',
 		);
 	});
+
+	test("does not emit path traversal in media embed URLs", async () => {
+		const processor = makeProcessor(fixtureRoot, { enableMediaEmbeds: true });
+		const file = await processor.process({
+			value: "![[../../secret.png]]",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		// The URL must be traversal-free; only the alt attribute may echo the
+		// original (unescaped) target text.
+		expect(output).not.toContain('src="../');
+		expect(output).toContain('src="/secret.png"');
+	});
 });
 
 describe("backlinks HTML", () => {
@@ -1716,18 +1811,25 @@ describe("diagnostic modes", () => {
 		expect(String(file.messages[0])).toContain("[[nonexistent]]");
 	});
 
-	test("records fatal broken-link diagnostics when onBrokenLink is error", async () => {
-		const processor = makeProcessor(fixtureRoot, { onBrokenLink: "error" });
+	test("resolves valid links after a broken link when onBrokenLink is warn", async () => {
+		const processor = makeProcessor(fixtureRoot, { onBrokenLink: "warn" });
 		const file = await processor.process({
-			value: "[[nonexistent]]",
+			value: "Broken [[nonexistent]] then valid [[guide/getting-started]].",
 			path: path.resolve(fixtureRoot, "index.md"),
 		});
 
-		expect(file.messages).toHaveLength(2);
-		expect(String(file.messages[0])).toContain(
-			"[rspress-plugin-obsidian-wikilink:broken-page] [[nonexistent]]",
-		);
-		expect(String(file.messages[1])).toContain("Unexpected error processing");
+		expect(String(file)).toContain("/guide/getting-started");
+	});
+
+	test("throws a fatal error when onBrokenLink is error", async () => {
+		const processor = makeProcessor(fixtureRoot, { onBrokenLink: "error" });
+
+		await expect(
+			processor.process({
+				value: "[[nonexistent]]",
+				path: path.resolve(fixtureRoot, "index.md"),
+			}),
+		).rejects.toThrow();
 	});
 });
 
@@ -1736,6 +1838,33 @@ describe("content index resilience", () => {
 		const index = await buildContentIndex(fixtureRoot);
 		expect(index.pages.length).toBeGreaterThan(0);
 		expect(index.byAbsolutePath.size).toBeGreaterThan(0);
+	});
+
+	test("reuses unchanged page objects across incremental rebuilds", async () => {
+		const { mkdtempSync, writeFileSync, mkdirSync, rmSync } = await import(
+			"node:fs"
+		);
+		const tmp = await import("node:os");
+		const pathMod = await import("node:path");
+		const root = mkdtempSync(pathMod.join(tmp.tmpdir(), "vault-"));
+		mkdirSync(pathMod.join(root, "sub"), { recursive: true });
+		writeFileSync(pathMod.join(root, "a.md"), "# A\n\nHeading A");
+		writeFileSync(pathMod.join(root, "sub", "b.md"), "# B\n\nHeading B");
+
+		const first = await getCachedContentIndex(root);
+		const a1 = first.byPathKey.get("a");
+		const b1 = first.byPathKey.get("sub/b");
+
+		writeFileSync(pathMod.join(root, "sub", "b.md"), "# B\n\n## New Heading");
+		const second = await getCachedContentIndex(root);
+		const a2 = second.byPathKey.get("a");
+		const b2 = second.byPathKey.get("sub/b");
+
+		expect(a2).toBe(a1);
+		expect(b2).not.toBe(b1);
+		expect(b2?.headings.map((h) => h.rawText)).toEqual(["B", "New Heading"]);
+
+		rmSync(root, { recursive: true, force: true });
 	});
 });
 
@@ -1928,5 +2057,76 @@ describe("complex yaml frontmatter", () => {
 		const index = await buildContentIndex(complexYamlFixtureRoot);
 		const page = index.byPathKey.get("inline");
 		expect(page?.publish).toBe(true);
+	});
+});
+
+describe("wikilink escape handling", () => {
+	test("does not split on an escaped pipe in the target", () => {
+		const parsed = parseWikiLink("Page\\|Name", "[[Page\\|Name]]");
+
+		expect(parsed.target).toBe("Page|Name");
+		expect(parsed.alias).toBeUndefined();
+	});
+
+	test("does not split on an escaped hash in the target", () => {
+		const parsed = parseWikiLink("Page\\#Name", "[[Page\\#Name]]");
+
+		expect(parsed.target).toBe("Page#Name");
+		expect(parsed.subpath).toBeUndefined();
+	});
+
+	test("resolves escaped special characters in aliases", () => {
+		const parsed = parseWikiLink(
+			"guide/getting-started#Install|A \\| B",
+			"[[guide/getting-started#Install|A \\| B]]",
+		);
+
+		expect(parsed.alias).toBe("A | B");
+		expect(parsed.subpath).toEqual({ kind: "heading", value: "Install" });
+	});
+});
+
+describe("heading transclusion with explicit ids and slugs", () => {
+	test("transcludes a section by explicit id and emits a heading anchor", async () => {
+		const processor = makeProcessor(headingFixtureRoot, {
+			enableTransclusion: true,
+		});
+		const file = await processor.process({
+			value: "![[guide/variants#custom-anchor]]",
+			path: path.resolve(headingFixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain('class="obsidian-transclusion"');
+		expect(output).toContain('id="custom-anchor"');
+		expect(output).toContain("Custom Anchor");
+		expect(output).not.toContain("{#custom-anchor}");
+	});
+
+	test("transcludes a section by slugified heading", async () => {
+		const processor = makeProcessor(headingFixtureRoot, {
+			enableTransclusion: true,
+		});
+		const file = await processor.process({
+			value: "![[guide/variants#spaced-atx-heading]]",
+			path: path.resolve(headingFixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain('class="obsidian-transclusion"');
+		expect(output).toContain('id="spaced-atx-heading"');
+		expect(output).toContain("Spaced ATX Heading");
+	});
+});
+
+describe("media URL encoding", () => {
+	test("percent-encodes spaces in media embed URLs", async () => {
+		const processor = makeProcessor(fixtureRoot, { enableMediaEmbeds: true });
+		const file = await processor.process({
+			value: "![[my image.png]]",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		expect(String(file)).toContain('src="/my%20image.png"');
 	});
 });
