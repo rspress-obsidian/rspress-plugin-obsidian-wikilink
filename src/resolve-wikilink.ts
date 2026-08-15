@@ -348,7 +348,7 @@ function resolveSubpath(
 	return resolveHeadingSlug(page, subpath.value);
 }
 
-function resolveHeadingSlug(
+export function resolveHeadingSlug(
 	page: ContentPage,
 	anchor: string,
 ): string | undefined {

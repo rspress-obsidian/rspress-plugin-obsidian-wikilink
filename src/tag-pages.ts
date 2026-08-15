@@ -54,7 +54,40 @@ function collectTags(index: ContentIndex): Map<string, TagEntry> {
 }
 
 function escapeYamlDoubleQuoted(value: string): string {
-	return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+	return value
+		.replace(/\\/g, "\\\\")
+		.replace(/"/g, '\\"')
+		.replace(/\n/g, "\\n")
+		.replace(/\r/g, "\\r")
+		.replace(/\t/g, "\\t");
+}
+
+/**
+ * Escape a tag name for safe inclusion in a markdown heading. HTML special
+ * characters are entity-escaped (the page renders with raw HTML enabled) and
+ * link-label brackets are escaped so the tag cannot form a `[x](y)` link.
+ */
+function escapeHeadingText(value: string): string {
+	return value
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/\[/g, "\\[")
+		.replace(/\]/g, "\\]")
+		.replace(/\n/g, " ")
+		.replace(/\r/g, " ");
+}
+
+/**
+ * Escape markdown link-label and destination syntax so a page `title`
+ * containing `]`, `(`, or `)` cannot break out of the generated link.
+ */
+function escapeMarkdownLabel(value: string): string {
+	return value.replace(/\\/g, "\\\\").replace(/[[\]]/g, "\\$&");
+}
+
+function escapeMarkdownDestination(value: string): string {
+	return value.replace(/[()]/g, "\\$&").replace(/\s/g, "%20");
 }
 
 function generateTagPageContent(
@@ -63,17 +96,19 @@ function generateTagPageContent(
 ): string {
 	const listItems = pages
 		.map((p) => {
-			const label = p.title ?? p.baseName;
-			return `- [${label}](${p.routePath})`;
+			const label = escapeMarkdownLabel(p.title ?? p.baseName);
+			const destination = escapeMarkdownDestination(p.routePath);
+			return `- [${label}](${destination})`;
 		})
 		.join("\n");
 
+	const escapedHeading = escapeHeadingText(displayName);
 	return [
 		"---",
 		`title: "#${escapeYamlDoubleQuoted(displayName)}"`,
 		"---",
 		"",
-		`# #${displayName}`,
+		`# #${escapedHeading}`,
 		"",
 		listItems,
 		"",

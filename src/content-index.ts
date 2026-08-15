@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import GithubSlugger from "github-slugger";
 import matter from "gray-matter";
-import { findWikilinkMatches } from "./parse-wikilink.ts";
+import { findWikilinkMatches, parseWikiLink } from "./parse-wikilink.ts";
 import { normalizeLookupValue, stripMarkdownFormatting } from "./slug.ts";
 import type {
 	BacklinkRef,
@@ -31,12 +31,17 @@ const MAX_CACHED_INDEXES = 10;
 interface CacheEntry {
 	signature: string;
 	index: ContentIndex;
+	/** Per-file parse results, keyed by absolute path, so an unchanged file is
+	 *  reused across rebuilds instead of being re-read and re-parsed. */
+	files: Map<string, ParsedFileEntry>;
 }
 
-/** LRU cache keyed by resolved root directory. `Map` preserves insertion
- *  order — on access we delete-then-set to move the entry to the end, and
- *  evict the first entry when over capacity. */
-const contentIndexCache = new Map<string, CacheEntry>();
+interface ParsedFileEntry {
+	mtimeMs: number;
+	size: number;
+	page: ContentPage;
+	rawMarkdown: string;
+}
 
 interface MarkdownFileEntry {
 	absolutePath: string;
@@ -45,6 +50,10 @@ interface MarkdownFileEntry {
 	size: number;
 }
 
+/** LRU cache keyed by resolved root directory. `Map` preserves insertion
+ *  order — on access we delete-then-set to move the entry to the end, and
+ *  evict the first entry when over capacity. */
+const contentIndexCache = new Map<string, CacheEntry>();
 /**
  * Scan `rootDir` for Markdown pages and attachment files, then build a fresh
  * {@link ContentIndex} with pre-computed lookup tables.
@@ -53,7 +62,7 @@ export async function buildContentIndex(
 	rootDir: string,
 ): Promise<ContentIndex> {
 	const absoluteRoot = path.resolve(rootDir);
-	const files = scanVaultFiles(absoluteRoot);
+	const files = await scanVaultFiles(absoluteRoot);
 	return buildContentIndexFromFiles(absoluteRoot, files);
 }
 
@@ -65,7 +74,7 @@ export async function getCachedContentIndex(
 	rootDir: string,
 ): Promise<ContentIndex> {
 	const absoluteRoot = path.resolve(rootDir);
-	const files = scanVaultFiles(absoluteRoot);
+	const files = await scanVaultFiles(absoluteRoot);
 	const signature = files
 		.map((file) => `${file.relativePath}:${file.mtimeMs}:${file.size}`)
 		.join("|");
@@ -78,8 +87,17 @@ export async function getCachedContentIndex(
 		return cached.index;
 	}
 
-	const index = await buildContentIndexFromFiles(absoluteRoot, files);
-	contentIndexCache.set(absoluteRoot, { signature, index });
+	const priorFiles = cached?.files ?? new Map<string, ParsedFileEntry>();
+	const index = await buildContentIndexFromFiles(
+		absoluteRoot,
+		files,
+		priorFiles,
+	);
+	contentIndexCache.set(absoluteRoot, {
+		signature,
+		index,
+		files: priorFiles,
+	});
 
 	// Evict least-recently-used entry (first in insertion order) when over cap.
 	if (contentIndexCache.size > MAX_CACHED_INDEXES) {
@@ -95,12 +113,13 @@ export async function getCachedContentIndex(
 async function buildContentIndexFromFiles(
 	rootDir: string,
 	files: MarkdownFileEntry[],
+	priorFiles?: Map<string, ParsedFileEntry>,
 ): Promise<ContentIndex> {
 	const markdownFiles = files.filter((file) =>
 		MARKDOWN_EXTENSIONS.has(path.extname(file.relativePath).toLowerCase()),
 	);
 	const settled = await Promise.allSettled(
-		markdownFiles.map((file) => buildContentPage(file)),
+		markdownFiles.map((file) => buildContentPage(file, priorFiles)),
 	);
 	const pages: ContentPage[] = [];
 	const rawContentByPath = new Map<string, string>();
@@ -193,6 +212,8 @@ async function buildContentIndexFromFiles(
 				byPathKeyCI,
 				byBaseName,
 				byBaseNameCI,
+				byTitle,
+				byAlias,
 				normalizedTarget,
 				page,
 			);
@@ -226,6 +247,8 @@ function resolveBacklinkTarget(
 	byPathKeyCI: Map<string, ContentPage[]>,
 	byBaseName: Map<string, ContentPage[]>,
 	byBaseNameCI: Map<string, ContentPage[]>,
+	byTitle: Map<string, ContentPage[]>,
+	byAlias: Map<string, ContentPage[]>,
 	normalizedTarget: string,
 	sourcePage: ContentPage,
 ): ContentPage[] {
@@ -288,6 +311,20 @@ function resolveBacklinkTarget(
 		}
 	}
 
+	// Frontmatter title and alias lookups: targets are already lowercased and
+	// slash-normalized during extraction, but title/alias keys are additionally
+	// whitespace-normalized by normalizeLookupValue. Apply the same fold before
+	// consulting those maps so `[[My Alias]]` records a backlink.
+	if (results.length === 0) {
+		const folded = normalizeLookupValue(normalizedTarget);
+		for (const page of byTitle.get(folded) ?? []) {
+			addPage(page);
+		}
+		for (const page of byAlias.get(folded) ?? []) {
+			addPage(page);
+		}
+	}
+
 	return results;
 }
 
@@ -307,9 +344,9 @@ function addBacklinkEntry(
 	}
 }
 
-function scanVaultFiles(rootDir: string): MarkdownFileEntry[] {
+async function scanVaultFiles(rootDir: string): Promise<MarkdownFileEntry[]> {
 	const results: MarkdownFileEntry[] = [];
-	const queue = [rootDir];
+	const queue: string[] = [rootDir];
 
 	while (queue.length > 0) {
 		const currentDir = queue.shift();
@@ -317,7 +354,12 @@ function scanVaultFiles(rootDir: string): MarkdownFileEntry[] {
 			continue;
 		}
 
-		const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+		const entries = await fs.promises.readdir(currentDir, {
+			withFileTypes: true,
+		});
+
+		const subdirs: string[] = [];
+		const fileStats: Promise<MarkdownFileEntry | undefined>[] = [];
 
 		for (const entry of entries) {
 			const absolutePath = path.join(currentDir, entry.name);
@@ -330,8 +372,7 @@ function scanVaultFiles(rootDir: string): MarkdownFileEntry[] {
 				) {
 					continue;
 				}
-
-				queue.push(absolutePath);
+				subdirs.push(absolutePath);
 				continue;
 			}
 
@@ -346,14 +387,27 @@ function scanVaultFiles(rootDir: string): MarkdownFileEntry[] {
 				continue;
 			}
 
-			const stats = fs.statSync(absolutePath);
-			results.push({
-				absolutePath: normalizeFsPath(path.resolve(absolutePath)),
-				relativePath,
-				mtimeMs: stats.mtimeMs,
-				size: stats.size,
-			});
+			fileStats.push(
+				fs.promises
+					.stat(absolutePath)
+					.then((stats) => ({
+						absolutePath: normalizeFsPath(path.resolve(absolutePath)),
+						relativePath,
+						mtimeMs: stats.mtimeMs,
+						size: stats.size,
+					}))
+					.catch(() => undefined),
+			);
 		}
+
+		const settled = await Promise.all(fileStats);
+		for (const entry of settled) {
+			if (entry !== undefined) {
+				results.push(entry);
+			}
+		}
+
+		queue.push(...subdirs);
 	}
 
 	results.sort((left, right) =>
@@ -366,10 +420,18 @@ function isRoutableRelativePath(relativePath: string): boolean {
 	return relativePath.split("/").every((segment) => !/^_[^_]/.test(segment));
 }
 
-async function buildContentPage(file: MarkdownFileEntry): Promise<{
+async function buildContentPage(
+	file: MarkdownFileEntry,
+	priorFiles?: Map<string, ParsedFileEntry>,
+): Promise<{
 	page: ContentPage;
 	rawMarkdown: string;
 }> {
+	const cached = priorFiles?.get(file.absolutePath);
+	if (cached && cached.mtimeMs === file.mtimeMs && cached.size === file.size) {
+		return { page: cached.page, rawMarkdown: cached.rawMarkdown };
+	}
+
 	const markdown = await fs.promises.readFile(file.absolutePath, "utf-8");
 	const routePath = deriveRoutePath(file.relativePath);
 	const pathKey = normalizePathKey(file.relativePath);
@@ -418,6 +480,14 @@ async function buildContentPage(file: MarkdownFileEntry): Promise<{
 		headingByText,
 		blocks,
 	};
+
+	const entry: ParsedFileEntry = {
+		mtimeMs: file.mtimeMs,
+		size: file.size,
+		page,
+		rawMarkdown: markdown,
+	};
+	priorFiles?.set(file.absolutePath, entry);
 
 	return { page, rawMarkdown: markdown };
 }
@@ -581,9 +651,8 @@ function extractWikilinkTargets(markdown: string): string[] {
 	const targets: string[] = [];
 
 	for (const match of findWikilinkMatches(markdown)) {
-		const inner = match.inner;
-		// Strip alias portion (after |) and anchor portion (after #)
-		const target = inner.split("|")[0]?.split("#")[0]?.trim() ?? "";
+		const parsed = parseWikiLink(match.inner, match.fullMatch);
+		const target = parsed.target;
 		if (!target) continue;
 
 		const normalized = target.replace(/\\/g, "/").toLowerCase();

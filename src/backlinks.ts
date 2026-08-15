@@ -1,4 +1,5 @@
 import path from "node:path";
+import { normalizeLookupValue } from "./slug.ts";
 import type { BacklinkRef, ContentIndex, ContentPage } from "./types.ts";
 import { normalizePathKey } from "./utils.ts";
 
@@ -105,7 +106,6 @@ function resolveBacklinkTarget(
 			addPage(page);
 		}
 	}
-
 	// Also try case-insensitive basename as fallback
 	if (results.length === 0) {
 		const ciBaseCandidates = index.byBaseNameCI.get(baseName);
@@ -113,6 +113,17 @@ function resolveBacklinkTarget(
 			for (const page of ciBaseCandidates) {
 				addPage(page);
 			}
+		}
+	}
+
+	// Frontmatter title and alias lookups (whitespace-normalized).
+	if (results.length === 0) {
+		const folded = normalizeLookupValue(normalizedTarget);
+		for (const page of index.byTitle.get(folded) ?? []) {
+			addPage(page);
+		}
+		for (const page of index.byAlias.get(folded) ?? []) {
+			addPage(page);
 		}
 	}
 

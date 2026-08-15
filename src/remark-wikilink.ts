@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { rehypeHeaderAnchor } from "@rspress/core/dist/node/mdx/rehypePlugins/headerAnchor.js";
 import type {
 	Blockquote,
 	HTML,
@@ -19,7 +20,8 @@ import type { VFile } from "vfile";
 import { getCachedBacklinksIndex, renderBacklinksHtml } from "./backlinks.ts";
 import { getCachedContentIndex } from "./content-index.ts";
 import { findWikilinkMatches, parseWikiLink } from "./parse-wikilink.ts";
-import { resolveWikiLink } from "./resolve-wikilink.ts";
+import { resolveHeadingSlug, resolveWikiLink } from "./resolve-wikilink.ts";
+import { slugifyHeading } from "./slug.ts";
 import { encodeTagPathSegment } from "./tag-pages.ts";
 import type {
 	ContentIndex,
@@ -51,6 +53,11 @@ const INLINE_FOOTNOTE_PATTERN = /\^\[([^\]]+)\]/g;
 const WIKILINK_EMBED_PATTERN = /!\[\[([^\]]+)\]\]/g;
 
 const MAX_TRANSCLUSION_DEPTH = 5;
+
+// Files that produced an "error"-mode diagnostic (broken/ambiguous link).
+// Failure is deferred to the end of the top-level pass so one bad link does
+// not abort resolution of the remaining wikilinks in the document.
+const pendingFailures = new WeakSet<VFile>();
 
 const IMAGE_EXTS = new Set([
 	"png",
@@ -196,6 +203,17 @@ export const remarkWikilink: RemarkPluginFactory<RemarkWikiLinkPluginOptions> =
 		try {
 			await remarkWikilinkInner(tree, file, getDocsRoot, options);
 		} catch (error) {
+			// A fatal VFileMessage (raised by file.fail for error-mode broken or
+			// ambiguous links) must propagate so the build actually fails.
+			if (
+				typeof error === "object" &&
+				error !== null &&
+				"fatal" in error &&
+				(error as { fatal?: unknown }).fatal === true
+			) {
+				throw error;
+			}
+
 			file.message(
 				`[rspress-plugin-obsidian-wikilink] Unexpected error processing ${file.path ?? "unknown file"}: ${error instanceof Error ? error.message : String(error)}`,
 			);
@@ -541,7 +559,16 @@ async function remarkWikilinkInner(
 	}
 
 	resolveWikilinksInAst(tree, currentPage, index, options, file);
+	emitBlockAnchors(tree, currentPage);
 
+	// Only the top-level pass (depth 0) may fail the file: a broken link must
+	// not abort resolution of the remaining wikilinks, so failure is raised
+	// once the whole document has been processed.
+	if (depth === 0 && pendingFailures.has(file)) {
+		file.fail(
+			`[rspress-plugin-obsidian-wikilink] One or more wikilinks failed to resolve (see messages above).`,
+		);
+	}
 	if (includePageDecorations && options.enableBacklinks) {
 		const backlinksMap = await getCachedBacklinksIndex(index);
 		const refs = backlinksMap.get(currentPage.routePath) ?? [];
@@ -585,9 +612,9 @@ async function renderTranscludedHtml(
 		depth,
 		content,
 	);
-
 	const htmlProcessor = unified()
 		.use(remarkRehype, { allowDangerousHtml: true })
+		.use(rehypeHeaderAnchor)
 		.use(rehypeStringify, { allowDangerousHtml: true });
 	const hastTree = htmlProcessor.runSync(transcludedAst);
 	return htmlProcessor.stringify(hastTree);
@@ -735,10 +762,16 @@ async function processEmbedsInTree(
 
 							if (parsed.subpath) {
 								if (parsed.subpath.kind === "heading") {
-									transcludedContent = extractHeadingSection(
-										content,
+									const headingSlug = resolveHeadingSlug(
+										resolved.targetPage,
 										parsed.subpath.value,
 									);
+									if (headingSlug !== undefined) {
+										transcludedContent = extractHeadingSection(
+											content,
+											headingSlug,
+										);
+									}
 								} else if (parsed.subpath.kind === "block") {
 									transcludedContent = extractBlockSection(
 										content,
@@ -847,6 +880,65 @@ function createHighlightNode(text: string): HTML {
 	};
 }
 
+/**
+ * Emit HTML anchors for every block ID indexed on the current page, so that
+ * `[[Page#^block-id]]` links actually resolve in the browser.
+ *
+ * The resolver produces `#^block-id` fragments; this function is the
+ * counterpart that materializes an `id="^block-id"` target in the output.
+ * Standalone `^id` markers are replaced entirely; inline `… ^id` markers are
+ * stripped from the paragraph and replaced with an empty anchor at their
+ * position. Both match the exact patterns used by {@link extractBlocks}.
+ */
+function emitBlockAnchors(tree: Root, currentPage: ContentPage): void {
+	const ids = new Set(currentPage.blocks.map((block) => block.id));
+	if (ids.size === 0) return;
+
+	unistVisit(tree, "text", (node, position, parent) => {
+		if (!parent || typeof position !== "number") return;
+		if (SKIP_PARENT_TYPES.has(parent.type)) return;
+
+		const value = node.value;
+		if (!value.includes("^")) return;
+
+		const standalone = /^\s*\^([A-Za-z0-9-]+)\s*$/.exec(value);
+		if (standalone) {
+			const id = standalone[1];
+			if (id && ids.has(id)) {
+				(parent as Parent & { children: unknown[] }).children.splice(
+					position,
+					1,
+					createBlockAnchor(id),
+				);
+			}
+			return;
+		}
+
+		const inline = /\s\^([A-Za-z0-9-]+)\s*$/.exec(value);
+		if (inline) {
+			const id = inline[1];
+			if (id && ids.has(id)) {
+				const leading = value.slice(0, value.length - inline[0].length);
+				const replacement: PhrasingContent[] = [];
+				if (leading.length > 0) {
+					replacement.push(createTextNode(leading));
+				}
+				replacement.push(createBlockAnchor(id));
+				const children = (parent as Parent & { children: PhrasingContent[] })
+					.children;
+				children.splice(position, 1, ...replacement);
+			}
+		}
+	});
+}
+
+function createBlockAnchor(id: string): HTML {
+	return {
+		type: "html",
+		value: `<a id="^${escapeHtmlAttribute(id)}"></a>`,
+	};
+}
+
 function escapeHtmlText(value: string): string {
 	return value
 		.replace(/&/g, "&amp;")
@@ -869,7 +961,8 @@ function reportDiagnostic(
 
 	if (status === "ambiguous-page") {
 		if (options.onAmbiguousLink === "error") {
-			file.fail(prefix);
+			pendingFailures.add(file);
+			file.message(prefix);
 			return;
 		}
 
@@ -878,7 +971,8 @@ function reportDiagnostic(
 	}
 
 	if (options.onBrokenLink === "error") {
-		file.fail(prefix);
+		pendingFailures.add(file);
+		file.message(prefix);
 		return;
 	}
 
@@ -893,40 +987,52 @@ function parseSizeAttr(sizeParam: string): string {
 	const height = match[2];
 	return height ? ` width="${width}" height="${height}"` : ` width="${width}"`;
 }
-
-/**
- * Resolve a media embed target to a root-relative URL.
- * Tries the file relative to the current markdown file, then relative to
- * docsRoot. Falls back to a root-relative path if neither is found on disk.
- */
 interface MediaResolveResult {
 	url: string;
 	found: boolean;
 }
 
+/**
+ * Resolve a media embed target to a root-relative URL.
+ * Tries the file relative to the current markdown file, then relative to
+ * docsRoot. Falls back to a root-relative path if neither is found on disk.
+ * Each path segment is percent-encoded so spaces and special characters
+ * produce valid `src`/`href` URLs.
+ */
 function resolveMediaSrc(
 	target: string,
 	docsRoot: string,
 	currentFilePath: string,
 ): MediaResolveResult {
+	// Percent-encode every segment, dropping `..`/`.` so a wikilink target
+	// cannot escape the docs root through the emitted URL.
+	const encodePath = (segments: string[]): string =>
+		`/${segments
+			.filter(
+				(segment) => segment !== "" && segment !== "." && segment !== "..",
+			)
+			.map((segment) => encodeURIComponent(segment))
+			.join("/")}`;
+
 	const tryRelToFile = path.resolve(path.dirname(currentFilePath), target);
 	if (fs.existsSync(tryRelToFile)) {
 		const rel = path.relative(docsRoot, tryRelToFile).replace(/\\/g, "/");
-		if (!rel.startsWith("..")) {
-			return { url: `/${rel}`, found: true };
+		if (!rel.startsWith("..") && !path.isAbsolute(rel)) {
+			return { url: encodePath(rel.split("/")), found: true };
 		}
 	}
 
 	const tryRelToRoot = path.resolve(docsRoot, target);
 	if (fs.existsSync(tryRelToRoot)) {
-		return {
-			url: `/${path.relative(docsRoot, tryRelToRoot).replace(/\\/g, "/")}`,
-			found: true,
-		};
+		const rel = path.relative(docsRoot, tryRelToRoot).replace(/\\/g, "/");
+		if (!rel.startsWith("..") && !path.isAbsolute(rel)) {
+			return { url: encodePath(rel.split("/")), found: true };
+		}
 	}
 
+	const fallback = target.startsWith("/") ? target.slice(1) : target;
 	return {
-		url: target.startsWith("/") ? target : `/${target}`,
+		url: encodePath(fallback.split("/")),
 		found: false,
 	};
 }
@@ -955,7 +1061,7 @@ function processCallouts(tree: Root): void {
 
 		const bq = node as Blockquote;
 		const firstPara = bq.children[0];
-		if (!firstPara || firstPara.type !== "paragraph") return;
+		if (firstPara?.type !== "paragraph") return;
 
 		const firstText = firstPara.children.find(
 			(c): c is Text => c.type === "text",
@@ -978,7 +1084,7 @@ function processCallouts(tree: Root): void {
 	// still present in the parent's children when we process the parent.
 	for (const { bq, position, parent: parentNode } of stack.reverse()) {
 		const firstPara = bq.children[0];
-		if (!firstPara || firstPara.type !== "paragraph") continue;
+		if (firstPara?.type !== "paragraph") continue;
 
 		const firstText = firstPara.children.find(
 			(c): c is Text => c.type === "text",
@@ -1077,7 +1183,6 @@ function buildCalloutNodes(
 		{ type: "html", value: '<div class="callout-content"></div></div>' },
 	];
 }
-
 function stripFrontmatter(content: string): string {
 	if (!content.startsWith("---")) return content;
 	const end = content.indexOf("\n---", 3);
@@ -1094,22 +1199,41 @@ function extractHeadingSection(
 	const normalizedTarget =
 		heading
 			.split("#")
-			.map((part) => part.trim().toLowerCase())
+			.map((part) => part.trim())
 			.filter(Boolean)
-			.at(-1) ?? heading.trim().toLowerCase();
+			.at(-1) ?? heading.trim();
+	const normalizedLower = normalizedTarget.toLowerCase();
 	let startLine = -1;
 	let startLevel = 0;
+
+	// True when `line` refers to the requested heading. Accepts a raw heading
+	// name, an explicit `{#id}`, or an already-slugified heading anchor.
+	const matchesTarget = (line: string): boolean => {
+		const trimmed = line.trim();
+		const explicitIdMatch = trimmed.match(/\s*\{#([A-Za-z0-9_:.-]+)\}\s*$/);
+		const headingText = explicitIdMatch
+			? trimmed.slice(0, trimmed.length - explicitIdMatch[0].length).trim()
+			: trimmed;
+		const slug = slugifyHeading(headingText);
+		return (
+			normalizedTarget === headingText ||
+			normalizedLower === headingText.toLowerCase() ||
+			normalizedTarget === slug ||
+			normalizedLower === slug ||
+			(explicitIdMatch !== null && explicitIdMatch[1] === normalizedTarget)
+		);
+	};
 
 	for (let i = 0; i < lines.length; i++) {
 		const line = lines[i] ?? "";
 
-		// ATX heading: ## Heading text
-		const atxMatch = line.match(/^(#{1,6})\s+(.+?)(?:\s+#+)?$/);
+		// ATX heading: ## Heading text (up to 3 leading spaces, per Markdown)
+		const atxMatch = line.match(/^\s{0,3}(#{1,6})[ \t]+(.+?)(?:\s+#+)?[ \t]*$/);
 		if (atxMatch) {
 			const level = (atxMatch[1] ?? "").length;
-			const title = (atxMatch[2] ?? "").trim().toLowerCase();
+			const title = (atxMatch[2] ?? "").trim();
 			if (startLine === -1) {
-				if (title === normalizedTarget) {
+				if (matchesTarget(title)) {
 					startLine = i;
 					startLevel = level;
 				}
@@ -1124,9 +1248,9 @@ function extractHeadingSection(
 		const setextUnderline = nextLine.match(/^\s*(=+|-+)\s*$/);
 		if (setextUnderline && line.trim().length > 0) {
 			const level = (setextUnderline[1] ?? "").startsWith("=") ? 1 : 2;
-			const title = line.trim().toLowerCase();
+			const title = line.trim();
 			if (startLine === -1) {
-				if (title === normalizedTarget) {
+				if (matchesTarget(title)) {
 					startLine = i;
 					startLevel = level;
 				}
@@ -1156,6 +1280,7 @@ function extractBlockSection(
 		const line = lines[i] ?? "";
 		const lineNorm = line.trim().toLowerCase();
 
+		// Standalone block ID on its own line: references the block above it.
 		if (lineNorm === `^${normalizedId}`) {
 			let start = i - 1;
 			while (start >= 0 && (lines[start] ?? "").trim() !== "") {
@@ -1168,12 +1293,58 @@ function extractBlockSection(
 			return block || undefined;
 		}
 
-		if (line.toLowerCase().includes(`^${normalizedId}`)) {
-			return line.replace(/\s*\^[\w-]+\s*$/, "").trim();
+		// Inline block ID appended to a line: references that whole block.
+		const inlineMatch = line.match(/^(.*?)\s+\^([A-Za-z0-9-]+)\s*$/);
+		if (inlineMatch && inlineMatch[2]?.toLowerCase() === normalizedId) {
+			const text = (inlineMatch[1] ?? "").trimEnd();
+			return extractInlineBlock(lines, i, text) || undefined;
 		}
 	}
 
 	return undefined;
+}
+
+/**
+ * Extract the markdown block beginning at `index`, whose first line is `text`
+ * (already stripped of the inline block ID). List items are extended to include
+ * their nested sub-items and continuation lines; every other block type is
+ * returned as a single line, matching the indexed block-ID semantics.
+ */
+function extractInlineBlock(
+	lines: string[],
+	index: number,
+	text: string,
+): string {
+	const listItem = text.match(/^(\s*)([-*+]|\d+[.)])\s+/);
+	if (!listItem) {
+		return text.trim();
+	}
+
+	const indent = (listItem[1] ?? "").length;
+	const block: string[] = [];
+	for (let j = index; j < lines.length; j++) {
+		if (j === index) {
+			block.push(text);
+			continue;
+		}
+
+		const line = lines[j] ?? "";
+		if (line.trim() === "") {
+			block.push(line);
+			continue;
+		}
+
+		const leading = line.length - line.trimStart().length;
+		if (leading > indent) {
+			block.push(line);
+			continue;
+		}
+
+		// A sibling item at the same indent, or a dedented line, ends the block.
+		break;
+	}
+
+	return block.join("\n").trim();
 }
 function extractFootnoteSourceMetadata(source: string): {
 	definitions: Map<string, string>;
