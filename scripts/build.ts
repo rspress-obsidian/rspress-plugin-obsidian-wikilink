@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { $ } from "bun";
+import { transform } from "lightningcss";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const DIST = path.join(ROOT, "dist");
@@ -33,6 +34,27 @@ async function copyAssets(): Promise<void> {
 	}
 }
 
+async function generateIcons(): Promise<void> {
+	await $`bun scripts/generate-icons.ts`.cwd(ROOT);
+}
+async function minifyStyles(): Promise<void> {
+	const src = path.join(ROOT, "src", "styles.css");
+	const dest = path.join(DIST, "styles.css");
+	const source = await Bun.file(src).text();
+	const result = transform({
+		filename: "styles.css",
+		code: Buffer.from(source),
+		minify: true,
+		sourceMap: false,
+	});
+	await Bun.write(dest, result.code);
+
+	const before = Buffer.byteLength(source);
+	const after = Buffer.byteLength(result.code);
+	const saved = ((1 - after / before) * 100).toFixed(1);
+	console.log(`  minified src/styles.css → dist/styles.css (${before}B → ${after}B, -${saved}%)`);
+}
+
 async function main(): Promise<void> {
 	const started = Date.now();
 	console.log("Building rspress-plugin-obsidian-wikilink…");
@@ -40,6 +62,8 @@ async function main(): Promise<void> {
 	await clean();
 	await compile();
 	await copyAssets();
+	await generateIcons();
+	await minifyStyles();
 
 	const elapsed = ((Date.now() - started) / 1000).toFixed(2);
 	console.log(`✓ Build complete in ${elapsed}s`);
