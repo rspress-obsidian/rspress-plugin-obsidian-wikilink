@@ -232,8 +232,13 @@ function processDataviewNodes(
 	unistVisit(tree, "text", (node, position, parent) => {
 		if (!parent || typeof position !== "number") return;
 		if (SKIP_PARENT_TYPES.has(parent.type)) return;
+		const visibleFields = node.value.replace(
+			/(?:\(|\[)([^()[\]:]+?)::\s*([^\])\n]*?)(?:\)|\])/g,
+			(fullMatch, _key: string, value: string, offset: number) =>
+				isInsideWikilink(node.value, offset) ? fullMatch : value,
+		);
+		if (visibleFields !== node.value) node.value = visibleFields;
 		if (!node.value.includes("=")) return;
-
 		const matches = [
 			...node.value.matchAll(
 				/(^|[\s(])=\s*([A-Za-z_][A-Za-z0-9_.]*(?:\([^()\n]*\))?)/g,

@@ -14,6 +14,9 @@ All notable changes to this project will be documented in this file.
 - Static `TABLE`, `LIST`, `TASK`, and `CALENDAR` rendering with `FROM`,
   `WHERE`, `SORT`, `GROUP BY`, `FLATTEN`, and `LIMIT`.
 - DataviewJS is explicitly rejected during static builds.
+- Static Dataview evaluation now supports nested fields, array flattening,
+  grouped rows, arithmetic and boolean expressions, link-aware comparisons,
+  common string/aggregate functions, and inline field display cleanup.
 
 ### Fixed
 

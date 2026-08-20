@@ -377,6 +377,36 @@ describe("static Dataview", () => {
 		expect(output).toContain("Review beta");
 		expect(output).toContain('type="checkbox"');
 	});
+	test("supports FLATTEN, GROUP BY, arithmetic, and inline field rendering", async () => {
+		const processor = makeProcessor(dataviewFixtureRoot, {
+			enableDataview: true,
+		});
+		const file = await processor.process({
+			value: [
+				"Value [rating:: 9].",
+				"",
+				"```dataview",
+				"TABLE WITHOUT ID tag",
+				'FROM "notes"',
+				"FLATTEN file.tags AS tag",
+				'WHERE tag = "#project/demo" AND priority + 1 > 2',
+				"```",
+				"",
+				"```dataview",
+				"TABLE WITHOUT ID key, length(rows)",
+				'FROM "notes"',
+				'GROUP BY "all"',
+				"```",
+			].join("\n"),
+			path: path.resolve(dataviewFixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain("Value 9.");
+		expect(output).toContain("#project/demo");
+		expect(output).toContain("2");
+	});
+
 	test("rejects DataviewJS in strict static mode", async () => {
 		const processor = makeProcessor(dataviewFixtureRoot, {
 			enableDataview: true,

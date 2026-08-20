@@ -222,6 +222,12 @@ commands are `FROM`, `WHERE`, `SORT`, `GROUP BY`, `FLATTEN`, and `LIMIT`.
 Metadata comes from YAML frontmatter, `Key:: value` inline fields, task fields,
 tags, links, and implicit `file.*` fields.
 
+Common scalar functions include `date`, `length`, `contains`, `startswith`,
+`endswith`, `lower`, `upper`, `round`, `floor`, `ceil`, `regexmatch`, `replace`,
+`split`, `join`, `typeof`, `default`, `choice`, `sum`, `average`, `min`, and
+`max`. `CALENDAR` is rendered as a static date-linked list; it is not an
+interactive Obsidian calendar widget.
+
 Example:
 
 ````markdown

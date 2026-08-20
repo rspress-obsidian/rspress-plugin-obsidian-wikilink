@@ -255,30 +255,30 @@ function executeQuery(
 		plan.kind === "TASK" ? createTaskRows(index) : createPageRows(index);
 	if (plan.source)
 		rows = rows.filter((row) => matchesSource(plan.source ?? "", row));
-	for (const expression of plan.where) {
-		rows = rows.filter((row) =>
-			Boolean(evaluateExpression(expression, row, index)),
-		);
-	}
 	for (const flatten of plan.flatten) {
 		const next: QueryRow[] = [];
+		const defaultAlias =
+			flatten.expression.split(".").at(-1) ?? flatten.expression;
+		const alias = flatten.alias ?? defaultAlias;
 		for (const row of rows) {
 			const value = evaluateExpression(flatten.expression, row, index);
 			if (Array.isArray(value)) {
 				for (const item of value) {
 					next.push({
 						...row,
-						values: {
-							...row.values,
-							...(flatten.alias ? { [flatten.alias]: item } : {}),
-						},
+						values: { ...row.values, [alias]: item },
 					});
 				}
 			} else {
-				next.push(row);
+				next.push({ ...row, values: { ...row.values, [alias]: value } });
 			}
 		}
 		rows = next;
+	}
+	for (const expression of plan.where) {
+		rows = rows.filter((row) =>
+			Boolean(evaluateExpression(expression, row, index)),
+		);
 	}
 	if (plan.groupBy) {
 		const grouped = new Map<string, QueryRow[]>();
@@ -449,7 +449,15 @@ function renderRows(plan: QueryPlan, rows: QueryRow[]): string {
 		return `<ul class="dataview dataview-list">${rows.map((row) => `<li>${renderValue(plan.fields[0] ? evaluateExpression(plan.fields[0].expression, row, undefined) : row.values.file && typeof row.values.file === "object" ? (row.values.file as { link?: unknown }).link : row.page.baseName)}</li>`).join("")}</ul>`;
 	}
 	if (plan.kind === "TASK") {
-		return `<ul class="dataview dataview-task-list">${rows.map((row) => `<li><input type="checkbox" disabled${row.item && "completed" in row.item && row.item.completed ? " checked" : ""} /> ${escapeHtml(row.item?.text ?? "")}</li>`).join("")}</ul>`;
+		const taskHtml = rows
+			.map((row) => {
+				if (row.groupRows) {
+					return `<li><strong>${renderValue(getField(row, "key"))}</strong><ul>${row.groupRows.map(renderTaskItem).join("")}</ul></li>`;
+				}
+				return renderTaskItem(row);
+			})
+			.join("");
+		return `<ul class="dataview dataview-task-list">${taskHtml}</ul>`;
 	}
 	if (plan.kind === "CALENDAR") {
 		return `<div class="dataview dataview-calendar"><ul>${rows.map((row) => `<li>${renderValue(plan.fields[0] ? evaluateExpression(plan.fields[0].expression, row, undefined) : null)} — ${renderValue(pageLink(row.page))}</li>`).join("")}</ul></div>`;
@@ -471,6 +479,12 @@ function renderRows(plan: QueryPlan, rows: QueryRow[]): string {
 		)
 		.join("");
 	return `<table class="dataview dataview-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+function renderTaskItem(row: QueryRow): string {
+	const task = row.item;
+	if (!task) return "";
+	const checked = "completed" in task && task.completed ? " checked" : "";
+	return `<li><input type="checkbox" disabled${checked} /> ${escapeHtml(task.text)}</li>`;
 }
 
 function evaluateExpression(
@@ -549,7 +563,7 @@ function evaluateExpression(
 		return value;
 	};
 	const parseUnary = (): unknown => {
-		if (tokens[cursor] === "!") {
+		if (tokens[cursor] === "!" || tokens[cursor]?.toUpperCase() === "NOT") {
 			cursor += 1;
 			return !parseUnary();
 		}
@@ -619,12 +633,35 @@ function evaluateFunction(name: string, args: unknown[]): unknown {
 		return String(args[0] ?? "").endsWith(String(args[1] ?? ""));
 	if (normalized === "lower") return String(args[0] ?? "").toLowerCase();
 	if (normalized === "upper") return String(args[0] ?? "").toUpperCase();
-	if (normalized === "typeof")
+	if (normalized === "round") {
+		const digits = Number(args[1] ?? 0);
+		const factor = 10 ** digits;
+		return Math.round(Number(args[0] ?? 0) * factor) / factor;
+	}
+	if (normalized === "floor") return Math.floor(Number(args[0] ?? 0));
+	if (normalized === "ceil") return Math.ceil(Number(args[0] ?? 0));
+	if (normalized === "regexmatch") {
+		return new RegExp(String(args[0] ?? "")).test(String(args[1] ?? ""));
+	}
+	if (normalized === "replace")
+		return String(args[0] ?? "").replace(
+			new RegExp(String(args[1] ?? ""), "g"),
+			String(args[2] ?? ""),
+		);
+	if (normalized === "split")
+		return String(args[0] ?? "").split(String(args[1] ?? ","));
+	if (normalized === "join")
+		return Array.isArray(args[0])
+			? args[0].map(String).join(String(args[1] ?? ", "))
+			: String(args[0] ?? "");
+	if (normalized === "typeof") {
+		if (args[0] instanceof Date) return "date";
 		return Array.isArray(args[0])
 			? "array"
 			: args[0] === null
 				? "null"
 				: typeof args[0];
+	}
 	if (normalized === "default") return args[0] == null ? args[1] : args[0];
 	if (normalized === "choice") return args[0] ? args[1] : args[2];
 	if (["sum", "average", "min", "max"].includes(normalized)) {
@@ -642,7 +679,6 @@ function evaluateFunction(name: string, args: unknown[]): unknown {
 	}
 	throw new Error(`Unsupported Dataview function: ${name}.`);
 }
-
 function getField(row: QueryRow, path: string): unknown {
 	if (path.startsWith("[[") && path.endsWith("]]"))
 		return {
@@ -653,18 +689,29 @@ function getField(row: QueryRow, path: string): unknown {
 	const parts = path.split(".");
 	let current: unknown = row.values;
 	for (const part of parts) {
-		if (current && typeof current === "object" && part in current)
-			current = (current as Record<string, unknown>)[part];
-		else if (current && typeof current === "object") {
-			const key = Object.keys(current).find(
-				(candidate) =>
-					candidate.toLowerCase() === part.toLowerCase() ||
-					sanitizeFieldKey(candidate) === part.toLowerCase(),
-			);
-			current = key ? (current as Record<string, unknown>)[key] : undefined;
-		} else return undefined;
+		if (Array.isArray(current)) {
+			current = current.map((item) => readProperty(item, part));
+			continue;
+		}
+		current = readProperty(current, part);
+		if (current === undefined) return undefined;
 	}
 	return current;
+}
+
+function readProperty(value: unknown, property: string): unknown {
+	if (!value || typeof value !== "object") return undefined;
+	if ("values" in value && value.values && typeof value.values === "object") {
+		value = value.values;
+	}
+	if (!value || typeof value !== "object") return undefined;
+	const entry = Object.entries(value).find(
+		([key]) =>
+			key === property ||
+			key.toLowerCase() === property.toLowerCase() ||
+			sanitizeFieldKey(key) === property.toLowerCase(),
+	);
+	return entry?.[1];
 }
 
 function renderValue(value: unknown): string {
@@ -804,6 +851,15 @@ function compareValues(left: unknown, right: unknown): number {
 	if (left == null && right == null) return 0;
 	if (left == null) return -1;
 	if (right == null) return 1;
+	if (isDataviewLink(left) && isDataviewLink(right)) {
+		return left.href === right.href
+			? 0
+			: left.label.localeCompare(right.label, undefined, {
+					sensitivity: "base",
+				});
+	}
+	if (isDataviewLink(left)) return left.label.localeCompare(String(right));
+	if (isDataviewLink(right)) return String(left).localeCompare(right.label);
 	const leftDate = left instanceof Date ? left.getTime() : undefined;
 	const rightDate = right instanceof Date ? right.getTime() : undefined;
 	if (leftDate !== undefined && rightDate !== undefined)
