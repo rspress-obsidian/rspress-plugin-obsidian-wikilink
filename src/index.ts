@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import type { RspressPlugin } from "@rspress/core";
 import type { RemarkPluginFactory } from "rspress-plugin-devkit";
 import { buildContentIndex } from "./content-index.ts";
+import { normalizeDailyNoteConfig } from "./daily-notes.ts";
 import { remarkWikilink } from "./remark-wikilink.ts";
 import { generateTagPages } from "./tag-pages.ts";
 import type {
@@ -22,6 +23,13 @@ export {
 	getCachedContentIndex,
 } from "./content-index.ts";
 export {
+	expandDailyTemplateText,
+	formatDailyNoteDate,
+	normalizeDailyNoteConfig,
+	parseDailyNoteDate,
+	renderDailyNavigation,
+} from "./daily-notes.ts";
+export {
 	extractDataviewMetadata,
 	renderDataviewInline,
 	renderDataviewQuery,
@@ -38,6 +46,7 @@ export type {
 	ContentAsset,
 	ContentIndex,
 	ContentPage,
+	DailyNotesOptions,
 	DataviewListItem,
 	DataviewTask,
 	DiagnosticMode,
@@ -59,15 +68,12 @@ function normalizePluginOptions(
 		onBrokenLink: options.onBrokenLink ?? "error",
 		onAmbiguousLink: options.onAmbiguousLink ?? "error",
 		enableFuzzyMatching: options.enableFuzzyMatching ?? false,
-		// Obsidian resolves links to existing files case-insensitively, so this
-		// matches vault behaviour out of the box. Set to `false` explicitly for
-		// strict, case-sensitive path matching.
 		enableCaseInsensitiveLookup: options.enableCaseInsensitiveLookup ?? true,
-		// Obsidian accepts standard markdown links to vault pages alongside
-		// wikilinks, so both forms resolve against the index by default.
 		enableMarkdownLinks: options.enableMarkdownLinks ?? true,
 		onDataviewError: options.onDataviewError ?? "error",
 		enableDataview: options.enableDataview ?? false,
+		enableDailyNotes: options.enableDailyNotes ?? false,
+		dailyNotes: normalizeDailyNoteConfig(options.dailyNotes),
 		enableTagLinking: options.enableTagLinking ?? false,
 		enableCallouts: options.enableCallouts ?? false,
 		enableBacklinks: options.enableBacklinks ?? false,

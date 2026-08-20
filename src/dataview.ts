@@ -1,3 +1,5 @@
+import type { DailyNoteConfig } from "./daily-notes.ts";
+import { parseDailyNoteDate } from "./daily-notes.ts";
 import type {
 	ContentIndex,
 	ContentPage,
@@ -120,10 +122,11 @@ export function renderDataviewQuery(
 	query: string,
 	currentPage: ContentPage,
 	index: ContentIndex,
+	dailyConfig?: DailyNoteConfig,
 ): QueryResult {
 	try {
 		const plan = parseQuery(query);
-		const rows = executeQuery(plan, currentPage, index);
+		const rows = executeQuery(plan, currentPage, index, dailyConfig);
 		return { html: renderRows(plan, rows) };
 	} catch (error) {
 		return {
@@ -136,9 +139,10 @@ export function renderDataviewInline(
 	expression: string,
 	currentPage: ContentPage,
 	index: ContentIndex,
+	dailyConfig?: DailyNoteConfig,
 ): QueryResult {
 	try {
-		const row = createPageRow(currentPage, index);
+		const row = createPageRow(currentPage, index, dailyConfig);
 		const value = evaluateExpression(expression.trim(), row, index);
 		return {
 			html: `<span class="dataview-inline">${renderValue(value)}</span>`,
@@ -245,14 +249,16 @@ function parseAliasedField(source: string): QueryField {
 	}
 	return { expression: source.trim(), label: source.trim() };
 }
-
 function executeQuery(
 	plan: QueryPlan,
 	currentPage: ContentPage,
 	index: ContentIndex,
+	dailyConfig?: DailyNoteConfig,
 ): QueryRow[] {
 	let rows =
-		plan.kind === "TASK" ? createTaskRows(index) : createPageRows(index);
+		plan.kind === "TASK"
+			? createTaskRows(index, dailyConfig)
+			: createPageRows(index, dailyConfig);
 	if (plan.source)
 		rows = rows.filter((row) => matchesSource(plan.source ?? "", row));
 	for (const flatten of plan.flatten) {
@@ -320,11 +326,17 @@ function executeQuery(
 	return typeof plan.limit === "number" ? rows.slice(0, plan.limit) : rows;
 }
 
-function createPageRows(index: ContentIndex): QueryRow[] {
-	return index.pages.map((page) => createPageRow(page, index));
+function createPageRows(
+	index: ContentIndex,
+	dailyConfig?: DailyNoteConfig,
+): QueryRow[] {
+	return index.pages.map((page) => createPageRow(page, index, dailyConfig));
 }
 
-function createTaskRows(index: ContentIndex): QueryRow[] {
+function createTaskRows(
+	index: ContentIndex,
+	dailyConfig?: DailyNoteConfig,
+): QueryRow[] {
 	const rows: QueryRow[] = [];
 	for (const page of index.pages) {
 		for (const task of page.dataviewTasks) {
@@ -332,7 +344,7 @@ function createTaskRows(index: ContentIndex): QueryRow[] {
 				page,
 				item: task,
 				values: {
-					...createPageValues(page, index),
+					...createPageValues(page, index, dailyConfig),
 					...task.fields,
 					text: task.text,
 					completed: task.completed,
@@ -344,16 +356,24 @@ function createTaskRows(index: ContentIndex): QueryRow[] {
 	return rows;
 }
 
-function createPageRow(page: ContentPage, index: ContentIndex): QueryRow {
-	return { page, values: createPageValues(page, index) };
+function createPageRow(
+	page: ContentPage,
+	index: ContentIndex,
+	dailyConfig?: DailyNoteConfig,
+): QueryRow {
+	return { page, values: createPageValues(page, index, dailyConfig) };
 }
 
 function createPageValues(
 	page: ContentPage,
 	index: ContentIndex,
+	dailyConfig?: DailyNoteConfig,
 ): Record<string, unknown> {
 	const ctime = new Date(page.fileCtimeMs);
 	const mtime = new Date(page.fileMtimeMs);
+	const dailyDate = dailyConfig
+		? parseDailyNoteDate(page.relativePath, dailyConfig)
+		: undefined;
 	const file = {
 		path: page.relativePath,
 		name: page.baseName,
@@ -379,6 +399,7 @@ function createPageValues(
 		mtime,
 		cday: ctime.toISOString().slice(0, 10),
 		mday: mtime.toISOString().slice(0, 10),
+		day: dailyDate,
 	};
 	return {
 		...page.dataviewFields,

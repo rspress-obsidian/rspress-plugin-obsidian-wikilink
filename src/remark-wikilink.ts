@@ -20,6 +20,11 @@ import type { Parent } from "unist";
 import type { VFile } from "vfile";
 import { getCachedBacklinksIndex, renderBacklinksHtml } from "./backlinks.ts";
 import { getCachedContentIndex } from "./content-index.ts";
+import {
+	expandDailyTemplateText,
+	parseDailyNoteDate,
+	renderDailyNavigation,
+} from "./daily-notes.ts";
 import { renderDataviewInline, renderDataviewQuery } from "./dataview.ts";
 import { findWikilinkMatches, parseWikiLink } from "./parse-wikilink.ts";
 import { resolveHeadingSlug, resolveWikiLink } from "./resolve-wikilink.ts";
@@ -218,7 +223,12 @@ function processDataviewNodes(
 		}
 		if (language !== "dataview") return;
 
-		const result = renderDataviewQuery(node.value, currentPage, index);
+		const result = renderDataviewQuery(
+			node.value,
+			currentPage,
+			index,
+			options.dailyNotes,
+		);
 		if (result.error) {
 			reportDataviewDiagnostic(file, options, result.error);
 			return;
@@ -257,7 +267,12 @@ function processDataviewNodes(
 					createTextNode(node.value.slice(cursor, expressionStart)),
 				);
 			}
-			const result = renderDataviewInline(expression, currentPage, index);
+			const result = renderDataviewInline(
+				expression,
+				currentPage,
+				index,
+				options.dailyNotes,
+			);
 			if (result.error || !result.html) {
 				reportDataviewDiagnostic(
 					file,
@@ -283,6 +298,34 @@ function processDataviewNodes(
 			...replacementNodes,
 		);
 	});
+}
+
+function processDailyNoteNodes(
+	tree: Root,
+	currentPage: ContentPage,
+	index: ContentIndex,
+	options: NormalizedPluginOptions,
+	includePageDecorations: boolean,
+): void {
+	const date = parseDailyNoteDate(currentPage.relativePath, options.dailyNotes);
+	if (!date) return;
+
+	unistVisit(tree, "text", (node, position, parent) => {
+		if (!parent || typeof position !== "number") return;
+		if (SKIP_PARENT_TYPES.has(parent.type)) return;
+		node.value = expandDailyTemplateText(node.value, date);
+	});
+
+	if (includePageDecorations && options.dailyNotes.navigation) {
+		const navigation = renderDailyNavigation(
+			currentPage,
+			index.pages,
+			options.dailyNotes,
+		);
+		if (navigation) {
+			tree.children.unshift({ type: "html", value: navigation });
+		}
+	}
 }
 
 function reportDataviewDiagnostic(
@@ -345,6 +388,15 @@ async function remarkWikilinkInner(
 			`[rspress-plugin-obsidian-wikilink] File "${currentFilePath}" not found in content index — wikilink processing skipped.`,
 		);
 		return;
+	}
+	if (options.enableDailyNotes) {
+		processDailyNoteNodes(
+			tree,
+			currentPage,
+			index,
+			options,
+			includePageDecorations,
+		);
 	}
 
 	if (options.enableDataview) {

@@ -17,6 +17,8 @@ All notable changes to this project will be documented in this file.
 - Static Dataview evaluation now supports nested fields, array flattening,
   grouped rows, arithmetic and boolean expressions, link-aware comparisons,
   common string/aggregate functions, and inline field display cleanup.
+- Static Daily Notes date recognition, template expansion, Dataview `file.day`
+  metadata, and previous/current/next navigation.
 
 ### Fixed
 

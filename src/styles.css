@@ -619,3 +619,26 @@ a.obsidian-embed:hover {
 .dataview-inline {
 	display: inline;
 }
+
+/* ─── Daily Notes ───────────────────────────────────────────────────────── */
+
+.obsidian-daily-navigation {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	margin: 1rem 0;
+	padding: 0.6rem 0.8rem;
+	border: 1px solid var(--rp-c-divider-light, #d9deea);
+	border-radius: 6px;
+	background: var(--rp-c-bg-soft, #f7f8fa);
+}
+
+.daily-notes-current {
+	font-weight: 600;
+}
+
+.daily-notes-placeholder {
+	display: inline-block;
+	min-width: 4rem;
+}

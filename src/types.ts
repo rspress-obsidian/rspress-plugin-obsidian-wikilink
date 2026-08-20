@@ -10,6 +10,15 @@ export type DiagnosticMode = "error" | "warn";
  * All fields are optional; the normalized defaults are conservative (most
  * opt-in features disabled).
  */
+export interface DailyNotesOptions {
+	/** Vault-relative folder containing date-formatted daily notes. */
+	folder?: string;
+	/** Moment-style date format used in filenames. Default: `YYYY-MM-DD`. */
+	dateFormat?: string;
+	/** Add previous/current/next links to published daily notes. Default: `true`. */
+	navigation?: boolean;
+}
+
 export interface RspressPluginObsidianWikiLinkOptions {
 	/** How to report unresolvable wikilinks. Default: `"error"`. */
 	onBrokenLink?: DiagnosticMode;
@@ -43,6 +52,12 @@ export interface RspressPluginObsidianWikiLinkOptions {
 	 * DataviewJS is never executed. Default: `false`.
 	 */
 	enableDataview?: boolean;
+	/**
+	 * Enable static Daily Notes date expansion and navigation. Default: `false`.
+	 */
+	enableDailyNotes?: boolean;
+	/** Daily Notes folder, filename format, and navigation settings. */
+	dailyNotes?: DailyNotesOptions;
 	/**
 	 * Rewrite inline `#tag` tokens into links to `/tags/<tag>`. Default: `false`.
 	 */
@@ -86,6 +101,8 @@ export interface NormalizedPluginOptions {
 	enableMarkdownLinks: boolean;
 	onDataviewError: DiagnosticMode;
 	enableDataview: boolean;
+	enableDailyNotes: boolean;
+	dailyNotes: Required<DailyNotesOptions>;
 	enableTagLinking: boolean;
 	enableCallouts: boolean;
 	enableBacklinks: boolean;

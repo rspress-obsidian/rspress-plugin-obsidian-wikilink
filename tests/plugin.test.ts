@@ -5,6 +5,7 @@ import remarkParse from "remark-parse";
 import remarkStringify from "remark-stringify";
 import { unified } from "unified";
 import { buildContentIndex, getCachedContentIndex } from "../src/content-index";
+import { formatDailyNoteDate, parseDailyNoteDate } from "../src/daily-notes";
 import { findWikilinkMatches, parseWikiLink } from "../src/parse-wikilink";
 import { remarkWikilink } from "../src/remark-wikilink";
 import { resolveWikiLink } from "../src/resolve-wikilink";
@@ -78,6 +79,10 @@ const dataviewFixtureRoot = path.resolve(
 	process.cwd(),
 	"tests/fixtures/dataview",
 );
+const dailyNotesFixtureRoot = path.resolve(
+	process.cwd(),
+	"tests/fixtures/daily-notes",
+);
 
 const DEFAULT_OPTIONS: NormalizedPluginOptions = {
 	onBrokenLink: "error",
@@ -87,6 +92,8 @@ const DEFAULT_OPTIONS: NormalizedPluginOptions = {
 	enableMarkdownLinks: true,
 	onDataviewError: "error",
 	enableDataview: false,
+	enableDailyNotes: false,
+	dailyNotes: { folder: "", dateFormat: "YYYY-MM-DD", navigation: true },
 	enableTagLinking: false,
 	enableCallouts: false,
 	enableBacklinks: false,
@@ -419,6 +426,47 @@ describe("static Dataview", () => {
 				path: path.resolve(dataviewFixtureRoot, "index.md"),
 			}),
 		).rejects.toThrow("DataviewJS is not executed");
+	});
+});
+
+describe("static Daily Notes", () => {
+	test("parses configured Daily Notes dates", () => {
+		const config = {
+			folder: "",
+			dateFormat: "YYYY-MM-DD",
+			navigation: true,
+		};
+		const date = parseDailyNoteDate("2026-08-20.md", config);
+
+		expect(date?.toISOString()).toBe("2026-08-20T00:00:00.000Z");
+		expect(formatDailyNoteDate(date!, "dddd, MMMM D, YYYY")).toBe(
+			"Thursday, August 20, 2026",
+		);
+	});
+
+	test("expands templates and renders previous/current/next navigation", async () => {
+		const processor = makeProcessor(dailyNotesFixtureRoot, {
+			enableDailyNotes: true,
+			enableDataview: true,
+			dailyNotes: {
+				folder: "",
+				dateFormat: "YYYY-MM-DD",
+				navigation: true,
+			},
+		});
+		const file = await processor.process({
+			value: await Bun.file(
+				path.join(dailyNotesFixtureRoot, "2026-08-20.md"),
+			).text(),
+			path: path.join(dailyNotesFixtureRoot, "2026-08-20.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain("Thursday, August 20, 2026");
+		expect(output).toContain('class="obsidian-daily-navigation"');
+		expect(output).toContain('href="/2026-08-19"');
+		expect(output).toContain('href="/2026-08-21"');
+		expect(output).toContain("2026-08-20");
 	});
 });
 

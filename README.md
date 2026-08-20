@@ -35,6 +35,7 @@ Obsidian-style wikilinks for Rspress. Write your docs in Obsidian, publish with 
 | `[^1]` | Footnotes with definitions |
 | `- [ ] task` | Task lists (native Rspress) |
 | Dataview query blocks | Static DQL tables, lists, tasks, and calendars (opt-in) |
+| Daily Notes | Date expansion and previous/current/next navigation (opt-in) |
 | Backlinks panel | Auto-generated per page (opt-in) |
 
 
@@ -43,7 +44,7 @@ This plugin targets **static Obsidian-flavored Markdown** published through Rspr
 supports wikilinks (and their standard markdown `[Label](Page.md)` equivalents),
 heading and block references, unique vault-wide search links, transclusion, media
 embeds, callouts, comments, highlights, tags, footnotes, selected frontmatter fields,
-backlinks, and opt-in static Dataview DQL.
+backlinks, opt-in static Dataview DQL, and static Daily Notes date expansion.
 
 Static Dataview evaluates query blocks during the Rspress build. It supports
 `TABLE`, `LIST`, `TASK`, and `CALENDAR` queries with `FROM`, `WHERE`, `SORT`,
@@ -51,9 +52,14 @@ Static Dataview evaluates query blocks during the Rspress build. It supports
 tags, links, tasks, and common scalar functions. DataviewJS is intentionally not
 executed.
 
+Static Daily Notes recognizes date-formatted filenames, expands `{{date}}`,
+`{{date:FORMAT}}`, and date offsets such as `{{date+1d}}`, and can render
+previous/current/next navigation. It does not create files or emulate the
+interactive Obsidian Daily Notes command.
+
 It does not emulate Obsidian's application runtime. Canvas files, workspace
-navigation, graph views, daily-note commands, community-plugin code, and editor-only
-features are outside the static Markdown pipeline.
+navigation, graph views, community-plugin code, and editor-only features are
+outside the static Markdown pipeline.
 
 The supported static syntax matrix is:
 
@@ -71,6 +77,7 @@ The supported static syntax matrix is:
 | Tags and backlinks | Yes | Yes | Yes |
 | Footnotes and highlights | Yes | N/A | Yes |
 | Static Dataview DQL | Yes | Yes | Yes |
+| Daily Notes | Yes | N/A | Yes |
 | Frontmatter metadata | Yes | Yes | Yes |
 | Broken and ambiguous diagnostics | Yes | Yes | Yes |
 
@@ -163,6 +170,12 @@ export default defineConfig({
     enableCaseInsensitiveLookup: true,  // case-insensitive path lookup (default: true, matches Obsidian)
     enableMarkdownLinks: true,          // [x](Page.md) resolved like wikilinks (default: true)
     enableDataview: false,              // static Dataview queries (default: false)
+    enableDailyNotes: false,            // date expansion/navigation (default: false)
+    dailyNotes: {
+      folder: "",
+      dateFormat: "YYYY-MM-DD",
+      navigation: true,
+    },
     enableTagLinking: false,            // #tag → /tags/tag (default: false)
     enableCallouts: false,              // > [!note] → styled divs (default: false)
     enableBacklinks: false,             // append backlinks panel (default: false)
@@ -242,6 +255,30 @@ LIMIT 10
 
 DataviewJS is intentionally not executed. This plugin does not embed the
 Obsidian runtime or execute arbitrary vault JavaScript.
+
+### `enableDailyNotes`
+
+- `false` — leave Daily Note templates and navigation unchanged (default).
+- `true` — recognize date-formatted daily note paths, expand date placeholders,
+  expose `file.day` to static Dataview queries, and render navigation.
+
+Configuration:
+
+```ts
+pluginObsidianWikiLink({
+  enableDailyNotes: true,
+  dailyNotes: {
+    folder: "Daily",
+    dateFormat: "YYYY-MM-DD",
+    navigation: true,
+  },
+});
+```
+
+Supported template forms include `{{date}}`, `{{date:FORMAT}}`, and offsets such
+as `{{date+1d}}`, `{{date-1w}}`, `{{date+1m}}`, and `{{date-1y}}`. This is static
+publishing support; it does not create missing notes or implement Obsidian's
+interactive Daily Notes command.
 
 ### `enableTagLinking`
 
