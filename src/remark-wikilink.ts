@@ -26,6 +26,7 @@ import {
 	renderDailyNavigation,
 } from "./daily-notes.ts";
 import { renderDataviewInline, renderDataviewQuery } from "./dataview.ts";
+import { renderDataviewJs } from "./dataview-js.ts";
 import { findWikilinkMatches, parseWikiLink } from "./parse-wikilink.ts";
 import { resolveHeadingSlug, resolveWikiLink } from "./resolve-wikilink.ts";
 import { humanizeBaseName, slugifyHeading } from "./slug.ts";
@@ -214,11 +215,20 @@ function processDataviewNodes(
 	unistVisit(tree, "code", (node) => {
 		const language = node.lang?.toLowerCase();
 		if (language === "dataviewjs") {
-			reportDataviewDiagnostic(
-				file,
-				options,
-				"DataviewJS is not executed during static builds.",
+			const result = renderDataviewJs(
+				node.value,
+				currentPage,
+				index,
+				options.dailyNotes,
 			);
+			if (result.error) {
+				reportDataviewDiagnostic(file, options, result.error);
+				return;
+			}
+			if (!result.html) return;
+			const htmlNode = node as unknown as HTML;
+			htmlNode.type = "html";
+			htmlNode.value = result.html;
 			return;
 		}
 		if (language !== "dataview") return;

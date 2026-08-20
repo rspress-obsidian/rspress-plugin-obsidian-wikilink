@@ -414,7 +414,28 @@ describe("static Dataview", () => {
 		expect(output).toContain("2");
 	});
 
-	test("rejects DataviewJS in strict static mode", async () => {
+	test("renders sandboxed DataviewJS table queries", async () => {
+		const processor = makeProcessor(dataviewFixtureRoot, {
+			enableDataview: true,
+			onDataviewError: "error",
+		});
+		const file = await processor.process({
+			value: [
+				"```dataviewjs",
+				'const pages = dv.pages("#project/demo").where(p => p.status === "open");',
+				'dv.table(["File"], pages.map(p => [p.file.link]));',
+				"```",
+			].join("\n"),
+			path: path.resolve(dataviewFixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain('class="dataviewjs-table"');
+		expect(output).toContain('href="/notes/alpha"');
+		expect(output).not.toContain("Beta");
+	});
+
+	test("rejects DataviewJS host access", async () => {
 		const processor = makeProcessor(dataviewFixtureRoot, {
 			enableDataview: true,
 			onDataviewError: "error",
@@ -422,10 +443,10 @@ describe("static Dataview", () => {
 
 		await expect(
 			processor.process({
-				value: "```dataviewjs\nreturn dv.pages();\n```",
+				value: "```dataviewjs\ndv.paragraph(process.version);\n```",
 				path: path.resolve(dataviewFixtureRoot, "index.md"),
 			}),
-		).rejects.toThrow("DataviewJS is not executed");
+		).rejects.toThrow("forbidden host");
 	});
 });
 

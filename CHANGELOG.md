@@ -13,7 +13,8 @@ All notable changes to this project will be documented in this file.
   metadata, DQL query blocks, and inline expressions.
 - Static `TABLE`, `LIST`, `TASK`, and `CALENDAR` rendering with `FROM`,
   `WHERE`, `SORT`, `GROUP BY`, `FLATTEN`, and `LIMIT`.
-- DataviewJS is explicitly rejected during static builds.
+- Restricted DataviewJS compatibility for common `dv.pages`, collection, and
+  rendering APIs; host access and unrestricted JavaScript remain rejected.
 - Static Dataview evaluation now supports nested fields, array flattening,
   grouped rows, arithmetic and boolean expressions, link-aware comparisons,
   common string/aggregate functions, and inline field display cleanup.

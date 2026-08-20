@@ -49,8 +49,8 @@ backlinks, opt-in static Dataview DQL, and static Daily Notes date expansion.
 Static Dataview evaluates query blocks during the Rspress build. It supports
 `TABLE`, `LIST`, `TASK`, and `CALENDAR` queries with `FROM`, `WHERE`, `SORT`,
 `GROUP BY`, `FLATTEN`, `LIMIT`, frontmatter fields, inline fields, file metadata,
-tags, links, tasks, and common scalar functions. DataviewJS is intentionally not
-executed.
+tags, links, tasks, and common scalar functions. DataviewJS uses a restricted
+compatibility API; arbitrary host access and unrestricted JavaScript are rejected.
 
 Static Daily Notes recognizes date-formatted filenames, expands `{{date}}`,
 `{{date:FORMAT}}`, and date offsets such as `{{date+1d}}`, and can render
@@ -253,8 +253,16 @@ LIMIT 10
 ```
 ````
 
-DataviewJS is intentionally not executed. This plugin does not embed the
-Obsidian runtime or execute arbitrary vault JavaScript.
+DataviewJS is evaluated by a restricted interpreter, not JavaScript `eval`.
+Supported APIs are `dv.pages`, `dv.current`, `dv.page`, `dv.array`, `dv.date`,
+`dv.table`, `dv.list`, `dv.taskList`, `dv.paragraph`, and `dv.header`, plus
+restricted collection methods such as `where`, `filter`, `map`, `sort`, `limit`,
+`slice`, `join`, and `flat`.
+
+Host access is rejected: `process`, `Bun`, `Deno`, `fetch`, filesystem APIs,
+dynamic imports, constructors, prototypes, timers, and arbitrary JavaScript
+evaluation are unavailable. Unsupported syntax reports through
+`onDataviewError`.
 
 ### `enableDailyNotes`
 
