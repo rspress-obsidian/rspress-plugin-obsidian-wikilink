@@ -35,6 +35,15 @@ export interface RspressPluginObsidianWikiLinkOptions {
 	 */
 	enableMarkdownLinks?: boolean;
 	/**
+	 * How invalid or unsupported Dataview blocks are reported. Default: `"error"`.
+	 */
+	onDataviewError?: DiagnosticMode;
+	/**
+	 * Evaluate static Dataview DQL blocks and inline expressions at build time.
+	 * DataviewJS is never executed. Default: `false`.
+	 */
+	enableDataview?: boolean;
+	/**
 	 * Rewrite inline `#tag` tokens into links to `/tags/<tag>`. Default: `false`.
 	 */
 	enableTagLinking?: boolean;
@@ -69,17 +78,14 @@ export interface RspressPluginObsidianWikiLinkOptions {
 	 */
 	enableDefaultStyles?: boolean;
 }
-
-/**
- * Plugin options with all defaults resolved. Produced internally by the
- * plugin entry; consumers do not normally construct this type directly.
- */
 export interface NormalizedPluginOptions {
 	onBrokenLink: DiagnosticMode;
 	onAmbiguousLink: DiagnosticMode;
 	enableFuzzyMatching: boolean;
 	enableCaseInsensitiveLookup: boolean;
 	enableMarkdownLinks: boolean;
+	onDataviewError: DiagnosticMode;
+	enableDataview: boolean;
 	enableTagLinking: boolean;
 	enableCallouts: boolean;
 	enableBacklinks: boolean;
@@ -151,6 +157,23 @@ export interface ContentAsset {
 	urlPath: string;
 }
 
+/** A Dataview task extracted from a Markdown list item. */
+export interface DataviewTask {
+	text: string;
+	completed: boolean;
+	line: number;
+	path: string;
+	fields: Record<string, unknown>;
+}
+
+/** A Dataview list item extracted from a Markdown list. */
+export interface DataviewListItem {
+	text: string;
+	line: number;
+	path: string;
+	fields: Record<string, unknown>;
+}
+
 /** The normalized, searchable representation of a single docs page. */
 export interface ContentPage {
 	absolutePath: string;
@@ -167,6 +190,9 @@ export interface ContentPage {
 	cssclasses: string[];
 	excerpt?: string;
 	publish: boolean;
+	fileCtimeMs: number;
+	fileMtimeMs: number;
+	fileSizeBytes: number;
 	headings: HeadingEntry[];
 	/** Pre-extracted normalized wikilink targets from this page's content. */
 	wikilinkTargets: string[];
@@ -175,6 +201,10 @@ export interface ContentPage {
 	/** Maps normalized (lowercased, single-spaced) raw heading text → first heading. */
 	headingByText: Map<string, HeadingEntry>;
 	blocks: BlockEntry[];
+	/** Frontmatter and inline fields indexed for static Dataview queries. */
+	dataviewFields: Record<string, unknown>;
+	dataviewTasks: DataviewTask[];
+	dataviewLists: DataviewListItem[];
 }
 
 /**

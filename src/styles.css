@@ -581,3 +581,41 @@ a.obsidian-embed:hover {
 	-webkit-mask: none;
 }
 /* ── END CALL OUT ICONS ── */
+
+/* ─── Static Dataview ───────────────────────────────────────────────────── */
+
+.dataview {
+	margin: 1rem 0;
+}
+
+.dataview-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.dataview-table th,
+.dataview-table td {
+	padding: 0.45rem 0.65rem;
+	border: 1px solid var(--rp-c-divider-light, #d9deea);
+	text-align: left;
+	vertical-align: top;
+}
+
+.dataview-table th {
+	background: var(--rp-c-bg-soft, #f7f8fa);
+	font-weight: 600;
+}
+
+.dataview-list,
+.dataview-task-list,
+.dataview-calendar ul {
+	padding-left: 1.5rem;
+}
+
+.dataview-task-list input[type="checkbox"] {
+	margin-right: 0.4rem;
+}
+
+.dataview-inline {
+	display: inline;
+}

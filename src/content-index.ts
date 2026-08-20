@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import GithubSlugger from "github-slugger";
 import matter from "gray-matter";
+import { extractDataviewMetadata } from "./dataview.ts";
 import { findWikilinkMatches, parseWikiLink } from "./parse-wikilink.ts";
 import { normalizeLookupValue, stripMarkdownFormatting } from "./slug.ts";
 import type {
@@ -48,6 +49,7 @@ interface ParsedFileEntry {
 interface MarkdownFileEntry {
 	absolutePath: string;
 	relativePath: string;
+	ctimeMs: number;
 	mtimeMs: number;
 	size: number;
 }
@@ -401,6 +403,7 @@ async function scanVaultFiles(rootDir: string): Promise<MarkdownFileEntry[]> {
 					.then((stats) => ({
 						absolutePath: normalizeFsPath(path.resolve(absolutePath)),
 						relativePath,
+						ctimeMs: stats.ctimeMs,
 						mtimeMs: stats.mtimeMs,
 						size: stats.size,
 					}))
@@ -439,14 +442,18 @@ async function buildContentPage(
 	if (cached && cached.mtimeMs === file.mtimeMs && cached.size === file.size) {
 		return { page: cached.page, rawMarkdown: cached.rawMarkdown };
 	}
-
 	const markdown = await fs.promises.readFile(file.absolutePath, "utf-8");
 	const routePath = deriveRoutePath(file.relativePath);
 	const pathKey = normalizePathKey(file.relativePath);
 	const filePathKey = normalizeFilePathKey(file.relativePath);
 	const baseName = path.basename(filePathKey);
-	const { title, aliases, tags, cssclasses, excerpt, publish } =
-		extractFrontmatterMetadata(markdown);
+	const metadata = extractFrontmatterMetadata(markdown);
+	const { title, aliases, tags, cssclasses, excerpt, publish } = metadata;
+	const dataview = extractDataviewMetadata(
+		markdown,
+		metadata.frontmatter,
+		file.relativePath,
+	);
 
 	const lines = markdown.split(/\r?\n/);
 	const isContent = getContentLineFlags(lines);
@@ -487,11 +494,17 @@ async function buildContentPage(
 		cssclasses,
 		excerpt,
 		publish,
+		fileCtimeMs: file.ctimeMs,
+		fileMtimeMs: file.mtimeMs,
+		fileSizeBytes: file.size,
 		headings,
 		wikilinkTargets,
 		headingBySlug,
 		headingByText,
 		blocks,
+		dataviewFields: dataview.fields,
+		dataviewTasks: dataview.tasks,
+		dataviewLists: dataview.lists,
 	};
 
 	const entry: ParsedFileEntry = {
@@ -825,6 +838,7 @@ function extractFrontmatterMetadata(markdown: string): {
 	cssclasses: string[];
 	excerpt?: string;
 	publish: boolean;
+	frontmatter: Record<string, unknown>;
 } {
 	try {
 		const parsed = matter(markdown);
@@ -844,9 +858,16 @@ function extractFrontmatterMetadata(markdown: string): {
 			tags: [...new Set(tags)],
 			cssclasses: [...new Set(cssclasses)],
 			publish,
+			frontmatter: data,
 		};
 	} catch {
-		return { aliases: [], tags: [], cssclasses: [], publish: true };
+		return {
+			aliases: [],
+			tags: [],
+			cssclasses: [],
+			publish: true,
+			frontmatter: {},
+		};
 	}
 }
 

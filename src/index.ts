@@ -21,6 +21,11 @@ export {
 	buildContentIndex,
 	getCachedContentIndex,
 } from "./content-index.ts";
+export {
+	extractDataviewMetadata,
+	renderDataviewInline,
+	renderDataviewQuery,
+} from "./dataview.ts";
 export { findWikilinkMatches, parseWikiLink } from "./parse-wikilink.ts";
 export { resolveWikiLink } from "./resolve-wikilink.ts";
 export {
@@ -33,6 +38,8 @@ export type {
 	ContentAsset,
 	ContentIndex,
 	ContentPage,
+	DataviewListItem,
+	DataviewTask,
 	DiagnosticMode,
 	HeadingEntry,
 	NormalizedPluginOptions,
@@ -59,6 +66,8 @@ function normalizePluginOptions(
 		// Obsidian accepts standard markdown links to vault pages alongside
 		// wikilinks, so both forms resolve against the index by default.
 		enableMarkdownLinks: options.enableMarkdownLinks ?? true,
+		onDataviewError: options.onDataviewError ?? "error",
+		enableDataview: options.enableDataview ?? false,
 		enableTagLinking: options.enableTagLinking ?? false,
 		enableCallouts: options.enableCallouts ?? false,
 		enableBacklinks: options.enableBacklinks ?? false,
@@ -75,7 +84,7 @@ const STYLES_PATH = fileURLToPath(new URL("./styles.css", import.meta.url));
 /**
  * Rspress plugin that rewrites Obsidian-style wikilinks and supporting syntax
  * (callouts, tags, backlinks, transclusion, media embeds, footnotes, highlights,
- * and Obsidian comments) during the remark pipeline.
+ * comments, and optional static Dataview DQL) during the remark pipeline.
  *
  * @example
  * ```ts

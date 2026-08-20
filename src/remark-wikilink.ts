@@ -20,6 +20,7 @@ import type { Parent } from "unist";
 import type { VFile } from "vfile";
 import { getCachedBacklinksIndex, renderBacklinksHtml } from "./backlinks.ts";
 import { getCachedContentIndex } from "./content-index.ts";
+import { renderDataviewInline, renderDataviewQuery } from "./dataview.ts";
 import { findWikilinkMatches, parseWikiLink } from "./parse-wikilink.ts";
 import { resolveHeadingSlug, resolveWikiLink } from "./resolve-wikilink.ts";
 import { humanizeBaseName, slugifyHeading } from "./slug.ts";
@@ -198,6 +199,99 @@ function resolveWikilinksInAst(
 	});
 }
 
+function processDataviewNodes(
+	tree: Root,
+	currentPage: ContentPage,
+	index: ContentIndex,
+	file: VFile,
+	options: NormalizedPluginOptions,
+): void {
+	unistVisit(tree, "code", (node) => {
+		const language = node.lang?.toLowerCase();
+		if (language === "dataviewjs") {
+			reportDataviewDiagnostic(
+				file,
+				options,
+				"DataviewJS is not executed during static builds.",
+			);
+			return;
+		}
+		if (language !== "dataview") return;
+
+		const result = renderDataviewQuery(node.value, currentPage, index);
+		if (result.error) {
+			reportDataviewDiagnostic(file, options, result.error);
+			return;
+		}
+		if (!result.html) return;
+		const htmlNode = node as unknown as HTML;
+		htmlNode.type = "html";
+		htmlNode.value = result.html;
+	});
+
+	unistVisit(tree, "text", (node, position, parent) => {
+		if (!parent || typeof position !== "number") return;
+		if (SKIP_PARENT_TYPES.has(parent.type)) return;
+		if (!node.value.includes("=")) return;
+
+		const matches = [
+			...node.value.matchAll(
+				/(^|[\s(])=\s*([A-Za-z_][A-Za-z0-9_.]*(?:\([^()\n]*\))?)/g,
+			),
+		].filter((match) => !isInsideWikilink(node.value, match.index ?? 0));
+		if (matches.length === 0) return;
+
+		const replacementNodes: PhrasingContent[] = [];
+		let cursor = 0;
+		for (const match of matches) {
+			const expressionStart = (match.index ?? 0) + (match[1]?.length ?? 0);
+			const expression = match[2] ?? "";
+			const fullStart = match.index ?? 0;
+			if (fullStart > cursor) {
+				replacementNodes.push(
+					createTextNode(node.value.slice(cursor, expressionStart)),
+				);
+			}
+			const result = renderDataviewInline(expression, currentPage, index);
+			if (result.error || !result.html) {
+				reportDataviewDiagnostic(
+					file,
+					options,
+					result.error ?? "Inline expression returned no value.",
+				);
+				replacementNodes.push(
+					createTextNode(
+						node.value.slice(fullStart, expressionStart + expression.length),
+					),
+				);
+			} else {
+				replacementNodes.push({ type: "html", value: result.html });
+			}
+			cursor = expressionStart + expression.length;
+		}
+		if (cursor < node.value.length) {
+			replacementNodes.push(createTextNode(node.value.slice(cursor)));
+		}
+		(parent as Parent & { children: PhrasingContent[] }).children.splice(
+			position,
+			1,
+			...replacementNodes,
+		);
+	});
+}
+
+function reportDataviewDiagnostic(
+	file: VFile,
+	options: NormalizedPluginOptions,
+	message: string,
+): void {
+	const fullMessage = `[rspress-plugin-obsidian-wikilink:dataview] ${message}`;
+	if (options.onDataviewError === "error") {
+		file.fail(fullMessage);
+		return;
+	}
+	file.message(fullMessage);
+}
 export const remarkWikilink: RemarkPluginFactory<RemarkWikiLinkPluginOptions> =
 	({ getDocsRoot, options }) =>
 	async (tree: Root, file: VFile): Promise<void> => {
@@ -246,6 +340,10 @@ async function remarkWikilinkInner(
 			`[rspress-plugin-obsidian-wikilink] File "${currentFilePath}" not found in content index — wikilink processing skipped.`,
 		);
 		return;
+	}
+
+	if (options.enableDataview) {
+		processDataviewNodes(tree, currentPage, index, file, options);
 	}
 	const footnoteSourceMetadata = extractFootnoteSourceMetadata(
 		sourceContent ?? String(file),

@@ -9,6 +9,11 @@ All notable changes to this project will be documented in this file.
 - Shared wikilink tokenization for normal links and embeds, including escaped
   alias delimiters.
 - Compatibility fixtures for spaced page paths and duplicate heading slugs.
+- Static Dataview support for frontmatter, inline fields, tasks, lists, file
+  metadata, DQL query blocks, and inline expressions.
+- Static `TABLE`, `LIST`, `TASK`, and `CALENDAR` rendering with `FROM`,
+  `WHERE`, `SORT`, `GROUP BY`, `FLATTEN`, and `LIMIT`.
+- DataviewJS is explicitly rejected during static builds.
 
 ### Fixed
 

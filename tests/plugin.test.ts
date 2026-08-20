@@ -74,6 +74,10 @@ const pathCollisionFixtureRoot = path.resolve(
 	process.cwd(),
 	"tests/fixtures/path-collisions",
 );
+const dataviewFixtureRoot = path.resolve(
+	process.cwd(),
+	"tests/fixtures/dataview",
+);
 
 const DEFAULT_OPTIONS: NormalizedPluginOptions = {
 	onBrokenLink: "error",
@@ -81,6 +85,8 @@ const DEFAULT_OPTIONS: NormalizedPluginOptions = {
 	enableFuzzyMatching: false,
 	enableCaseInsensitiveLookup: false,
 	enableMarkdownLinks: true,
+	onDataviewError: "error",
+	enableDataview: false,
 	enableTagLinking: false,
 	enableCallouts: false,
 	enableBacklinks: false,
@@ -309,6 +315,80 @@ describe("buildContentIndex", () => {
 		expect(index.byFilePathKeyCI.get("foo/index")?.[0]?.relativePath).toBe(
 			"foo/index.md",
 		);
+	});
+});
+
+describe("static Dataview", () => {
+	test("indexes frontmatter, inline fields, tasks, and lists", async () => {
+		const index = await buildContentIndex(dataviewFixtureRoot);
+		const page = index.byFilePathKey.get("notes/alpha");
+
+		expect(page?.dataviewFields.status).toBe("open");
+		expect(page?.dataviewFields.owner).toBe("Alice");
+		expect(page?.dataviewTasks).toHaveLength(2);
+		expect(page?.dataviewTasks[0]?.completed).toBe(false);
+		expect(page?.dataviewTasks[0]?.fields.due).toBeInstanceOf(Date);
+		expect(page?.dataviewLists).toHaveLength(2);
+	});
+
+	test("renders static DQL tables, filters, sorting, and limits", async () => {
+		const processor = makeProcessor(dataviewFixtureRoot, {
+			enableDataview: true,
+		});
+		const file = await processor.process({
+			value: [
+				"```dataview",
+				"TABLE status, priority",
+				'FROM "notes"',
+				'WHERE status = "open"',
+				"SORT priority DESC",
+				"LIMIT 1",
+				"```",
+			].join("\n"),
+			path: path.resolve(dataviewFixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain('class="dataview dataview-table"');
+		expect(output).toContain("Alpha");
+		expect(output).not.toContain("Beta");
+	});
+
+	test("renders static TASK queries and inline expressions", async () => {
+		const processor = makeProcessor(dataviewFixtureRoot, {
+			enableDataview: true,
+		});
+		const file = await processor.process({
+			value: [
+				"Open task count: = length(file.tasks)",
+				"",
+				"```dataview",
+				"TASK",
+				'FROM "notes"',
+				"WHERE !completed",
+				"```",
+			].join("\n"),
+			path: path.resolve(dataviewFixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain('class="dataview-inline"');
+		expect(output).toContain("Ship alpha");
+		expect(output).toContain("Review beta");
+		expect(output).toContain('type="checkbox"');
+	});
+	test("rejects DataviewJS in strict static mode", async () => {
+		const processor = makeProcessor(dataviewFixtureRoot, {
+			enableDataview: true,
+			onDataviewError: "error",
+		});
+
+		await expect(
+			processor.process({
+				value: "```dataviewjs\nreturn dv.pages();\n```",
+				path: path.resolve(dataviewFixtureRoot, "index.md"),
+			}),
+		).rejects.toThrow("DataviewJS is not executed");
 	});
 });
 

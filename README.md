@@ -34,21 +34,26 @@ Obsidian-style wikilinks for Rspress. Write your docs in Obsidian, publish with 
 | `==highlight==` | Text highlighting (including callout titles) |
 | `[^1]` | Footnotes with definitions |
 | `- [ ] task` | Task lists (native Rspress) |
+| Dataview query blocks | Static DQL tables, lists, tasks, and calendars (opt-in) |
 | Backlinks panel | Auto-generated per page (opt-in) |
 
 
 ## Compatibility scope
-
 This plugin targets **static Obsidian-flavored Markdown** published through Rspress. It
 supports wikilinks (and their standard markdown `[Label](Page.md)` equivalents),
-heading and block references, unique vault-wide search links,
-transclusion, media embeds, callouts, comments, highlights, tags, footnotes, selected
-frontmatter fields, and backlinks.
+heading and block references, unique vault-wide search links, transclusion, media
+embeds, callouts, comments, highlights, tags, footnotes, selected frontmatter fields,
+backlinks, and opt-in static Dataview DQL.
 
-It does not emulate Obsidian's application runtime. Canvas files, Dataview or other
-community-plugin code, workspace navigation, graph views, daily-note commands, and
-editor-only features are outside the static Markdown pipeline. Obsidian features not
-listed in the syntax table should be treated as unsupported until covered by a test.
+Static Dataview evaluates query blocks during the Rspress build. It supports
+`TABLE`, `LIST`, `TASK`, and `CALENDAR` queries with `FROM`, `WHERE`, `SORT`,
+`GROUP BY`, `FLATTEN`, `LIMIT`, frontmatter fields, inline fields, file metadata,
+tags, links, tasks, and common scalar functions. DataviewJS is intentionally not
+executed.
+
+It does not emulate Obsidian's application runtime. Canvas files, workspace
+navigation, graph views, daily-note commands, community-plugin code, and editor-only
+features are outside the static Markdown pipeline.
 
 The supported static syntax matrix is:
 
@@ -65,6 +70,7 @@ The supported static syntax matrix is:
 | Callouts | Yes | N/A | Yes |
 | Tags and backlinks | Yes | Yes | Yes |
 | Footnotes and highlights | Yes | N/A | Yes |
+| Static Dataview DQL | Yes | Yes | Yes |
 | Frontmatter metadata | Yes | Yes | Yes |
 | Broken and ambiguous diagnostics | Yes | Yes | Yes |
 
@@ -149,26 +155,22 @@ import { pluginObsidianWikiLink } from "rspress-plugin-obsidian-wikilink";
 
 export default defineConfig({
   root: path.join(__dirname, "docs"),
-  plugins: [pluginObsidianWikiLink()],
-});
-```
-
-## Options
-
-```ts
-pluginObsidianWikiLink({
-  onBrokenLink: "error",              // "error" | "warn" (default: "error")
-  onAmbiguousLink: "error",           // "error" | "warn" (default: "error")
-  enableFuzzyMatching: false,         // shortest-suffix fallback (default: false)
-  enableCaseInsensitiveLookup: true,  // case-insensitive path lookup (default: true, matches Obsidian)
-  enableMarkdownLinks: true,          // [x](Page.md) resolved like wikilinks (default: true)
-  enableTagLinking: false,            // #tag → /tags/tag (default: false)
-  enableCallouts: false,              // > [!note] → styled divs (default: false)
-  enableBacklinks: false,             // append backlinks panel (default: false)
-  enableTransclusion: false,          // ![[Page]] → inline content (default: false)
-  enableMediaEmbeds: false,           // ![[img.png]] → <img> (default: false)
-  enableTagPages: false,              // generate /tags/{name} pages (default: false)
-  enableDefaultStyles: false,         // inject bundled CSS (default: false)
+  plugins: [pluginObsidianWikiLink({
+    onBrokenLink: "error",              // "error" | "warn" (default: "error")
+    onAmbiguousLink: "error",           // "error" | "warn" (default: "error")
+    onDataviewError: "error",           // "error" | "warn" (default: "error")
+    enableFuzzyMatching: false,         // shortest-suffix fallback (default: false)
+    enableCaseInsensitiveLookup: true,  // case-insensitive path lookup (default: true, matches Obsidian)
+    enableMarkdownLinks: true,          // [x](Page.md) resolved like wikilinks (default: true)
+    enableDataview: false,              // static Dataview queries (default: false)
+    enableTagLinking: false,            // #tag → /tags/tag (default: false)
+    enableCallouts: false,              // > [!note] → styled divs (default: false)
+    enableBacklinks: false,             // append backlinks panel (default: false)
+    enableTransclusion: false,          // ![[Page]] → inline content (default: false)
+    enableMediaEmbeds: false,           // ![[img.png]] → <img> (default: false)
+    enableTagPages: false,              // generate /tags/{name} pages (default: false)
+    enableDefaultStyles: false,         // inject bundled CSS (default: false)
+  })],
 });
 ```
 
@@ -202,6 +204,38 @@ Only `.md` / `.mdx` destinations are considered. External URLs, pure `#anchors`,
 **Dead-link gate.** Rspress resolves `[](x.md)` relative to the current page and fails the build on misses — before plugin remark plugins can resolve vault-style basename links. When this option is on, the plugin therefore defaults `markdown.link.checkDeadLinks` to `false` (an explicit setting in your Rspress config wins) and takes over the diagnostic itself: unresolvable `.md` destinations are reported through `onBrokenLink`, so genuinely broken links still fail the build by default.
 
 The embed form `![alt](note.md)` transcludes the page exactly like `![[note]]` when `enableTransclusion` is on, and renders as a styled link otherwise.
+
+### `onDataviewError`
+
+- `"error"` — fail the build when a static Dataview query is invalid or when a
+  `dataviewjs` block is encountered.
+- `"warn"` — keep the original query block and emit a build warning.
+
+### `enableDataview`
+
+- `false` — leave Dataview query blocks unchanged (default).
+- `true` — evaluate static `dataview` blocks and inline expressions during the
+  build.
+
+Supported query types are `TABLE`, `LIST`, `TASK`, and `CALENDAR`. Supported
+commands are `FROM`, `WHERE`, `SORT`, `GROUP BY`, `FLATTEN`, and `LIMIT`.
+Metadata comes from YAML frontmatter, `Key:: value` inline fields, task fields,
+tags, links, and implicit `file.*` fields.
+
+Example:
+
+````markdown
+```dataview
+TABLE status, priority, file.link AS note
+FROM "projects"
+WHERE status = "open"
+SORT priority DESC
+LIMIT 10
+```
+````
+
+DataviewJS is intentionally not executed. This plugin does not embed the
+Obsidian runtime or execute arbitrary vault JavaScript.
 
 ### `enableTagLinking`
 
