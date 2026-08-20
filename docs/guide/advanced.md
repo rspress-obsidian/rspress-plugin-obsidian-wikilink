@@ -14,7 +14,8 @@ pluginObsidianWikiLink({
 
   // Resolution
   enableFuzzyMatching: false,         // shortest-suffix path fallback
-  enableCaseInsensitiveLookup: false, // case-insensitive path lookup
+  enableCaseInsensitiveLookup: true,  // case-insensitive path lookup (default)
+  enableMarkdownLinks: true,          // [x](Page.md) resolved like wikilinks
 
   // Content features
   enableTagLinking: false,            // #tag → /tags/tag
@@ -50,8 +51,23 @@ Controls how the plugin handles ambiguous links (multiple pages share the same b
 
 ### `enableCaseInsensitiveLookup`
 
-- `false` (default) — case-sensitive path/basename lookups
-- `true` — falls back to case-insensitive matching when exact case fails
+- `true` (default) — falls back to case-insensitive matching when exact case fails; matches Obsidian, which resolves links to existing files case-insensitively
+- `false` — strict case-sensitive path/basename lookups
+
+### `enableMarkdownLinks`
+
+- `true` (default) — standard markdown links to vault pages (`[label](Page.md)`, including `#anchors` and `./relative.md` forms) resolve through the same ladder as wikilinks, matching Obsidian's acceptance of both link forms
+- `false` — markdown links are left to Rspress's own handling
+
+Only `.md` / `.mdx` destinations are considered; external URLs, pure `#anchors`, and extensionless routes are untouched. The embed form `![alt](note.md)` transcludes like `![[note]]` when `enableTransclusion` is on and renders as a styled link otherwise.
+
+**Dead-link gate.** Rspress resolves `[](x.md)` relative to the current page and
+fails the build on misses — before plugin remark plugins can resolve
+vault-style basename links. When this option is on, the plugin therefore
+defaults `markdown.link.checkDeadLinks` to `false` (an explicit setting in
+your Rspress config wins) and takes over the diagnostic itself: unresolvable
+`.md` destinations are reported through `onBrokenLink`, so genuinely broken
+links still fail the build by default.
 
 ### `enableTagLinking`
 
@@ -118,13 +134,13 @@ Produces `/tags/tutorial` and `/tags/obsidian`, each listing all pages tagged wi
 
 **Static callout:**
 ```markdown
-> [!warning] Watch out
+> [!failure] Watch out
 > This will be transformed.
 ```
 
 Output:
 ```html
-<div class="callout callout-warning">
+<div class="callout callout-failure">
   <div class="callout-title">Watch out</div>
   <div class="callout-content">This will be transformed.</div>
 </div>
@@ -133,12 +149,31 @@ Output:
 **Foldable callouts** use native `<details>`/`<summary>` — no JavaScript required:
 
 ```markdown
-> [!note]- Collapsed by default
+> [!success]- Collapsed by default
 > Hidden until the user clicks.
 
-> [!tip]+ Expanded by default
+> [!example]+ Expanded by default
 > Visible immediately, but collapsible.
 ```
+
+**Callout titles are inline markdown.** Bold, italics, code, and wikilinks
+render inside the title, matching Obsidian:
+
+```markdown
+> [!question] See [[guide/getting-started|Getting Started]] for **setup**
+> Body text
+```
+
+**Rspress built-in alert conflict — resolved automatically.** Rspress
+registers its own GitHub-style alert transform before plugin remark plugins
+run, so `> [!note]`, `[!tip]`, `[!warning]`, `[!caution]`, `[!danger]`,
+`[!info]`, and `[!details]` blockquotes arrive already converted — with
+Obsidian's fold suffix (`[!note]-`) leaked into the content and the first
+paragraph of multi-paragraph alerts dropped. When `enableCallouts` is on, the
+plugin detects those converted nodes, verifies them against the original
+source via position information, restores the original blockquotes, and
+renders every Obsidian callout type with full semantics. Standard `:::note`
+directive containers keep Rspress's native styling.
 
 ### `enableBacklinks`
 
@@ -157,6 +192,12 @@ The backlinks index is built during content indexing and stored on the `ContentI
 | `![[Page]]` | Full file content (frontmatter stripped) |
 | `![[Page#Heading]]` | Only the section under that heading |
 | `![[Page#^block]]` | Only the paragraph annotated with `^block` |
+| `![alt](Page.md)` | Markdown embed form — same as `![[Page]]` |
+
+A standalone `^block-id` separated from its block by a blank line still
+references the block above it. When a section cannot be located in the target
+file, the embed renders as a link to the page (with a build warning) instead
+of inlining the entire page — matching Obsidian's unresolved-embed behaviour.
 
 Supports ATX and setext headings in the target file. Any `[[wikilinks]]` found inside transcluded content are resolved automatically.
 
@@ -277,8 +318,8 @@ Resolution order for `[[target]]`:
 3. **Unique basename** — `[[getting-started]]` (one page matches)
 4. **Frontmatter `title`** — `[[Onboarding Guide]]` (unique match)
 5. **Frontmatter `aliases`** — `[[Start Here]]` (unique match)
-6. **Fuzzy matching** — (when `enableFuzzyMatching` is on) case-insensitive, shortest-suffix
-7. **Case-insensitive** — (when `enableCaseInsensitiveLookup` is on)
+6. **Case-insensitive** — (default; disable with `enableCaseInsensitiveLookup: false`)
+7. **Fuzzy matching** — (when `enableFuzzyMatching` is on) case-insensitive, shortest-suffix
 8. **Rejected** — broken or ambiguous
 
 Explicit `./` and `../` paths do not fall back to basename or metadata lookup when

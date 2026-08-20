@@ -52,7 +52,13 @@ function normalizePluginOptions(
 		onBrokenLink: options.onBrokenLink ?? "error",
 		onAmbiguousLink: options.onAmbiguousLink ?? "error",
 		enableFuzzyMatching: options.enableFuzzyMatching ?? false,
-		enableCaseInsensitiveLookup: options.enableCaseInsensitiveLookup ?? false,
+		// Obsidian resolves links to existing files case-insensitively, so this
+		// matches vault behaviour out of the box. Set to `false` explicitly for
+		// strict, case-sensitive path matching.
+		enableCaseInsensitiveLookup: options.enableCaseInsensitiveLookup ?? true,
+		// Obsidian accepts standard markdown links to vault pages alongside
+		// wikilinks, so both forms resolve against the index by default.
+		enableMarkdownLinks: options.enableMarkdownLinks ?? true,
 		enableTagLinking: options.enableTagLinking ?? false,
 		enableCallouts: options.enableCallouts ?? false,
 		enableBacklinks: options.enableBacklinks ?? false,
@@ -118,6 +124,23 @@ export function pluginObsidianWikiLink(
 
 		config(config) {
 			docsRoot = path.resolve(process.cwd(), config.root ?? "docs");
+
+			// Vault-style markdown links (`[x](Page.md)` resolved by basename,
+			// not relative path) fail Rspress's own dead-link gate before this
+			// plugin's remark pass can resolve them. When markdown-link
+			// resolution is on, take over that gate — unresolved `.md`
+			// destinations are then reported through `onBrokenLink` instead,
+			// preserving build safety. An explicit user setting wins.
+			if (
+				normalizedOptions.enableMarkdownLinks &&
+				config.markdown?.link?.checkDeadLinks === undefined
+			) {
+				config.markdown = {
+					...config.markdown,
+					link: { ...config.markdown?.link, checkDeadLinks: false },
+				};
+			}
+
 			return config;
 		},
 

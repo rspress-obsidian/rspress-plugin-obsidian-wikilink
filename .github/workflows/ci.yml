@@ -74,3 +74,6 @@ jobs:
 
       - name: Build docs
         run: bun run docs:build
+
+      - name: Integration tests
+        run: bun test tests/integration.test.ts

@@ -1,0 +1,179 @@
+/* Project landing theme: small, token-driven overrides on top of Rspress. */
+
+:root {
+	--site-accent: #6d5dfc;
+	--site-accent-strong: #3b82f6;
+	--site-surface: color-mix(in srgb, var(--rp-c-bg-soft) 86%, transparent);
+	--site-border: color-mix(in srgb, var(--rp-c-divider) 76%, transparent);
+}
+
+.rp-home-background {
+	background:
+		radial-gradient(circle at 18% 12%, rgb(109 93 252 / 18%), transparent 34rem),
+		radial-gradient(circle at 84% 22%, rgb(59 130 246 / 13%), transparent 32rem),
+		var(--rp-c-bg);
+}
+
+.rp-home-hero {
+	position: relative;
+	isolation: isolate;
+	padding: clamp(4.5rem, 10vw, 8rem) 1.5rem clamp(3.5rem, 8vw, 6rem);
+}
+
+.rp-home-hero::after {
+	position: absolute;
+	z-index: -1;
+	inset: 18% 14% 8%;
+	border: 1px solid color-mix(in srgb, var(--site-accent) 22%, transparent);
+	border-radius: 999px;
+	opacity: 0.45;
+	filter: blur(1px);
+	content: "";
+	pointer-events: none;
+}
+
+.rp-home-hero__container,
+.rp-home-feature {
+	max-width: 72rem;
+}
+
+.rp-home-hero__content {
+	max-width: 54rem;
+}
+
+.rp-home-hero__title-brand {
+	font-size: clamp(0.78rem, 1.3vw, 0.95rem);
+	font-weight: 750;
+	letter-spacing: 0.16em;
+	line-height: 1.2;
+	text-transform: uppercase;
+	background: linear-gradient(
+		110deg,
+		var(--site-accent-strong),
+		var(--site-accent)
+	);
+	-webkit-background-clip: text;
+	background-clip: text;
+	color: transparent;
+}
+
+.rp-home-hero__subtitle {
+	max-width: 50rem;
+	font-size: clamp(2.5rem, 6vw, 5.2rem);
+	letter-spacing: -0.055em;
+	line-height: 0.98;
+	text-wrap: balance;
+}
+
+.rp-home-hero__tagline {
+	max-width: 42rem;
+	font-size: clamp(1rem, 1.6vw, 1.18rem);
+	line-height: 1.7;
+	text-wrap: balance;
+}
+
+.rp-home-hero__actions {
+	gap: 0.8rem;
+}
+
+.rp-home-hero__action {
+	border-radius: 999px;
+	box-shadow: 0 8px 24px rgb(15 23 42 / 10%);
+	transition:
+		transform 160ms ease,
+		box-shadow 160ms ease;
+}
+
+.rp-home-hero__action:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 12px 30px rgb(15 23 42 / 16%);
+}
+
+.rp-home-feature {
+	gap: 1rem;
+	padding: 0 1.5rem 4rem;
+}
+
+.rp-home-feature__item-wrapper {
+	content-visibility: auto;
+	contain-intrinsic-size: 1px 13rem;
+}
+
+.rp-home-feature__card {
+	min-height: 12rem;
+	padding: 1.4rem;
+	background: var(--site-surface);
+	border: 1px solid var(--site-border);
+	border-radius: 1.1rem;
+	box-shadow: 0 10px 34px rgb(15 23 42 / 5%);
+	transition:
+		transform 160ms ease,
+		border-color 160ms ease,
+		box-shadow 160ms ease;
+}
+
+.rp-home-feature__item-wrapper:hover .rp-home-feature__card {
+	transform: translateY(-4px);
+	border-color: color-mix(in srgb, var(--site-accent) 48%, var(--site-border));
+	box-shadow: 0 18px 40px rgb(15 23 42 / 11%);
+}
+
+.rp-home-feature__icon {
+	display: grid;
+	place-items: center;
+	width: 2.7rem;
+	height: 2.7rem;
+	margin-bottom: 1rem;
+	border: 1px solid
+		color-mix(in srgb, var(--site-accent) 30%, var(--site-border));
+	border-radius: 0.85rem;
+	background: color-mix(in srgb, var(--site-accent) 10%, var(--site-surface));
+	font-size: 1.25rem;
+}
+
+.rp-home-feature__title {
+	letter-spacing: -0.02em;
+}
+
+.rp-home-feature__detail {
+	max-width: 30rem;
+	color: var(--rp-c-text-2);
+	line-height: 1.65;
+}
+
+html.dark .rp-home-background {
+	background:
+		radial-gradient(circle at 18% 12%, rgb(109 93 252 / 20%), transparent 34rem),
+		radial-gradient(circle at 84% 22%, rgb(59 130 246 / 16%), transparent 32rem),
+		var(--rp-c-bg);
+}
+
+html.dark .rp-home-feature__card {
+	box-shadow: 0 14px 44px rgb(0 0 0 / 18%);
+}
+
+@media (max-width: 640px) {
+	.rp-home-hero {
+		padding-top: 3.5rem;
+	}
+
+	.rp-home-hero::after {
+		inset: 14% 4% 5%;
+	}
+
+	.rp-home-feature {
+		padding-inline: 1rem;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.rp-home-hero__action,
+	.rp-home-feature__card {
+		transition: none;
+	}
+
+	.rp-home-hero__action:hover,
+	.rp-home-feature__item-wrapper:hover .rp-home-feature__card {
+		transform: none;
+	}
+}

@@ -1,10 +1,814 @@
 {
   "version": 1,
   "skills": {
+    "academic-pdf-to-gfm": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/doc-tools/skills/academic-pdf-to-gfm/SKILL.md",
+      "computedHash": "4eb493ca1720baa40ecddd7547bd72258c71ccdf3cdcf9607bf6470ca1865540"
+    },
+    "adaptive-wfo-epoch": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quant-research/skills/adaptive-wfo-epoch/SKILL.md",
+      "computedHash": "aa8545c81a35e6ad841cd45d6c9ce4ac5502be89fef095e5d4a09676eb312e24"
+    },
+    "adr-code-traceability": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/itp/skills/adr-code-traceability/SKILL.md",
+      "computedHash": "116992e78e61d380f99152abd3dc30a6c50aa5832d0d447aa7209579926a5382"
+    },
+    "adr-graph-easy-architect": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/itp/skills/adr-graph-easy-architect/SKILL.md",
+      "computedHash": "f02294a8ab7f82c681e89025177df328b6b8274733a883253434fa7280e36878"
+    },
+    "agent-reach": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/agent-reach/skills/agent-reach/SKILL.md",
+      "computedHash": "d17b0cc95ab0a3ca17552616a6ccc69ff844a39c0cd3d49b6e6830996177002d"
+    },
+    "agentic-process-monitor": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/agentic-process-monitor/SKILL.md",
+      "computedHash": "ac3a69fd3af965551e6ff7f6e9afce1f9a84bd39b7a675060549901ed49b8bab"
+    },
+    "alpha-forge-preship": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quality-tools/skills/alpha-forge-preship/SKILL.md",
+      "computedHash": "da495a9b5cd30606936ddd6f9827bd181ba416a492cb8dcf789b77856ae8bd1a"
+    },
+    "amazon-photos-album-download": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/productivity-tools/skills/amazon-photos-album-download/SKILL.md",
+      "computedHash": "ec87bb9e948997d1082c42a10477f780d67e2736dab9c0f17d7b5c763fc39ed5"
+    },
+    "analyze": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/analyze/SKILL.md",
+      "computedHash": "7e904fbbd348bc04920784070dab3f4dae48d3cc01dbda5ee87cf2f48e234e05"
+    },
+    "article-extractor": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/mql5/skills/article-extractor/SKILL.md",
+      "computedHash": "1298461fee39267e433436eee4a343e46a85c30fa9fd39b348c8c3659d235217"
+    },
+    "arxiv-source-first-paper-ingest": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/arxiv-source-first/skills/arxiv-source-first-paper-ingest/SKILL.md",
+      "computedHash": "38bcb07376b0dfc72137ab16425dfc3459bbb6754d79a3b806b842491f0062f6"
+    },
+    "ascii-diagram-validator": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/doc-tools/skills/ascii-diagram-validator/SKILL.md",
+      "computedHash": "d248fa3fcbd1dcf8dfcc9405731f4e16d274e8c5f10a372b6f7a1f4b0a661e73"
+    },
+    "asciinema-analyzer": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/asciinema-analyzer/SKILL.md",
+      "computedHash": "a5c5fdf6fcf1eb05e8a717f259c71c672671ff07727ab75fbf79baeb43667eca"
+    },
+    "asciinema-cast-format": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/asciinema-cast-format/SKILL.md",
+      "computedHash": "1a66dc9bdde61fe9bf4f4abe95f5021a567f2bf6f6b1e2f8c64ad2699a7ccb6c"
+    },
+    "asciinema-converter": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/asciinema-converter/SKILL.md",
+      "computedHash": "8677eb1245550c6b131aa9d149b1627a87856448a8c20550c736449c6db6528c"
+    },
+    "asciinema-player": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/asciinema-player/SKILL.md",
+      "computedHash": "795c134d3dec0f5292267bb97ec0e9730ba2ca253f411aa2bd18ecd310d0ab8e"
+    },
+    "asciinema-recorder": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/asciinema-recorder/SKILL.md",
+      "computedHash": "aa59fcd1ade5bc987277e0115d53fd512cf26f81b246b661cab7d80d5af31d7e"
+    },
+    "asciinema-streaming-backup": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/asciinema-streaming-backup/SKILL.md",
+      "computedHash": "6617a23c89953d82d4a95e56597d3317fc37727edec2db88eaa21a47c52f6afb"
+    },
+    "ask-glm": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/zai/skills/ask-glm/SKILL.md",
+      "computedHash": "8c35d3e9b3fe73b9cd08b97fee428ff53756076324d8e8c772a222321fcd6395"
+    },
+    "augment": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/kokoro-tts/skills/augment/SKILL.md",
+      "computedHash": "5fd452f6bb6f89924591a759439e4330f09fc96ef40e348da450531a220032cc"
+    },
+    "auto-sync": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/graphify-tools/skills/auto-sync/SKILL.md",
+      "computedHash": "01230ea3738d307895da0b85999f3f28e45f487b24d3c658e2f1da8d128a36f2"
+    },
+    "azure-provision": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/web-forge/skills/azure-provision/SKILL.md",
+      "computedHash": "801783ed7f75541211342222e72cd14dd44fd3a3b367977ad56e1de52e356a6c"
+    },
+    "backtesting-py-oracle": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quant-research/skills/backtesting-py-oracle/SKILL.md",
+      "computedHash": "f095604aef4ccabf8302316941384e8e603273b3221566cddb45d9d81ae69fdc"
+    },
+    "backup": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/backup/SKILL.md",
+      "computedHash": "3ebaada1426630c7c17ffa07e82245d132ac001aa92a98b851084014f1b6b3a6"
+    },
+    "booking-config": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/calcom-commander/skills/booking-config/SKILL.md",
+      "computedHash": "bbe3741841091ab6659150b65e3d1f015de1ffc94de01119e2b8b31e4e1d4a1e"
+    },
+    "booking-notify": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/calcom-commander/skills/booking-notify/SKILL.md",
+      "computedHash": "1965060a28ab9450f8ba1fbd4666fa9d4cbd33c7219bde4b0a54a351117a25a4"
+    },
+    "bootstrap": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/bootstrap/SKILL.md",
+      "computedHash": "d126036ec6336b6a8ad5636c20250f6dd4dcb357b0a9575be262fc8519a047fb"
+    },
+    "bootstrap-monorepo": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/itp/skills/bootstrap-monorepo/SKILL.md",
+      "computedHash": "28e01497e9487126125e22d173510dd31d697cef0a4c29bdfb69366128b062b9"
+    },
+    "bot-process-control": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/gmail-commander/skills/bot-process-control/SKILL.md",
+      "computedHash": "30993e8d18079ebac149722acf23048295fe8a58b5b9c3879473f31f0b7d716a"
+    },
+    "build-graph": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/graphify-tools/skills/build-graph/SKILL.md",
+      "computedHash": "0b97c7e72a39e6a1a74555181c3c6f5a17857013166c4f7de06cf823a2aa2954"
+    },
     "bun": {
       "source": "bun.sh",
       "sourceType": "well-known",
       "computedHash": "c20fe20eb84bb56fd5a96eae6e36c5fd8d38f989818a4944f8a08140fe5e7a5b"
+    },
+    "calcom-access": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/calcom-commander/skills/calcom-access/SKILL.md",
+      "computedHash": "440112c3cead64ac13d019e685e469f52d6977a084a3c8c493ca5cd4c28b7adb"
+    },
+    "calendar-event-manager": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/productivity-tools/skills/calendar-event-manager/SKILL.md",
+      "computedHash": "0494d9bd7e74231c3aba3e5420505bb0f4d46c339c6508caa803de2f664f58f2"
+    },
+    "cf-access-wall": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/web-forge/skills/cf-access-wall/SKILL.md",
+      "computedHash": "10964ad79b2c7ed212bf6ea6891769b7dc7a2fb34424bf6622680c28d9439465"
+    },
+    "chezmoi-sync": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/dotfiles-tools/skills/chezmoi-sync/SKILL.md",
+      "computedHash": "edc8bde5095fe89cc878d96cf743f19f392316c2dce2223827be70fcb3b069f6"
+    },
+    "chezmoi-workflows": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/dotfiles-tools/skills/chezmoi-workflows/SKILL.md",
+      "computedHash": "917a4d8ff0894c48702d37f7b351912eafb7f419b6b67c88e58f902e24535813"
+    },
+    "claude-code-proxy-patterns": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/claude-code-proxy-patterns/SKILL.md",
+      "computedHash": "56e6b9e41fc6980bd1fff86e5cbd30db5ec63425fe6d6c212212b7e8f397f604"
+    },
+    "clean-component-removal": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tts-tg-sync/skills/clean-component-removal/SKILL.md",
+      "computedHash": "e775e70b63a80698dee229b1f4cd116709ae2c71b7d68933facdaa5a9ac4f69b"
+    },
+    "cleanup-deleted": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tlg/skills/cleanup-deleted/SKILL.md",
+      "computedHash": "ac278fd6bd14fcb9a166d1bfed4c431f366bb9794fad2dc341620b589b396719"
+    },
+    "cli-anything": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/cli-anything/skills/cli-anything/SKILL.md",
+      "computedHash": "283222a560b1720c19a9187d2f5c3a0a37e266d6a48ff7a6b0f1a57e6481ce70"
+    },
+    "clickhouse-architect": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quality-tools/skills/clickhouse-architect/SKILL.md",
+      "computedHash": "46d8e3382d2f581bbe359b0b75531473bf33dfa9591d8cd459a0e2d1805a0818"
+    },
+    "clickhouse-cloud-management": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/clickhouse-cloud-management/SKILL.md",
+      "computedHash": "66de83fea079caa7dfc6fa599e4e11ed78981f513a324707f7f7779e68400d09"
+    },
+    "clickhouse-pydantic-config": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/clickhouse-pydantic-config/SKILL.md",
+      "computedHash": "396cdb3a52621673c87eda0c8342f5da6525db9720362d6723ccf89ab7ea07b2"
+    },
+    "cloudflare-workers-publish": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/cloudflare-workers-publish/SKILL.md",
+      "computedHash": "5e78cb8cab30b1807126666833b105cd19be3a49a8d3bebf7f33ee074363d817"
+    },
+    "code-clone-assistant": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quality-tools/skills/code-clone-assistant/SKILL.md",
+      "computedHash": "4b28023e141f369bdf24853f0eadc45febd506602b59ea8d1ad43c100c8aad20"
+    },
+    "code-hardcode-audit": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/itp/skills/code-hardcode-audit/SKILL.md",
+      "computedHash": "46739670c0563183f708c72867af2e77b232e7bf944ff7c077cdae16ce31c458"
+    },
+    "component-version-upgrade": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tts-tg-sync/skills/component-version-upgrade/SKILL.md",
+      "computedHash": "228c31ecc3a04f56bfd3737720aa38ab9a47c3388ea4ff9b3226286e0327f952"
+    },
+    "configure-macro-keyboard": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/macro-keyboard/skills/configure-macro-keyboard/SKILL.md",
+      "computedHash": "a9e748efc91078c815119b28d8f089405fe855ee06e3c25b69b04fd30bb14bd9"
+    },
+    "contribute": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/git-town-workflow/skills/contribute/SKILL.md",
+      "computedHash": "dd3671a125d7c30afb916caddfb41067027bd7c69fc2676662c0079572211b68"
+    },
+    "convert": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/convert/SKILL.md",
+      "computedHash": "814706c8da44df459857add443b6da067eb767b819c470fc0d283b89af6b3c7f"
+    },
+    "create": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/plugin-dev/skills/create/SKILL.md",
+      "computedHash": "83c13bcd0ce84948f527fa53f08a5cb98f9403189604dbccc9e7f46e57c94691"
+    },
+    "create-group": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tlg/skills/create-group/SKILL.md",
+      "computedHash": "556751a3e39e7b078aa3555dc7b9a041e3d770cf66f17e1c5d6fbe987185b7c3"
+    },
+    "crucible-emergent-resurrection": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/crucible/skills/d-emergent-resurrection/SKILL.md",
+      "computedHash": "729c0365e4773fc1542a16e1994a7855d6e56f8fff060bfba978cd063ee1714d"
+    },
+    "crucible-investigation-methodology": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/crucible/skills/b-investigation-methodology/SKILL.md",
+      "computedHash": "d656bc7bbc8de2657aecebd3da9ef16b1c2355701c53a3600ccd4373e46a32cc"
+    },
+    "crucible-meta-governance": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/crucible/skills/c-meta-governance/SKILL.md",
+      "computedHash": "0e7b52d7b66da2db944e9a9e9ff0dfe9fe56251f8e7be3eb6750aa1b13e39778"
+    },
+    "crucible-navigator": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/crucible/skills/00-navigator/SKILL.md",
+      "computedHash": "841de0325f2b554b7cccecd0b676c925c42d5a665e2f5d598e837d5cb9115d21"
+    },
+    "crucible-research-foundations": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/crucible/skills/a-research-foundations/SKILL.md",
+      "computedHash": "9745b62f725843ae382a23ed51a74a61c2804c307531e0a5f52c7c245ea5ca62"
+    },
+    "custom-sounds": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/pushover-commander/skills/custom-sounds/SKILL.md",
+      "computedHash": "d63c9a1660552613c42362b3d0dbaf218624df1a73caa9362301a13551ccde15"
+    },
+    "daemon-logs": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/daemon-logs/SKILL.md",
+      "computedHash": "5740467d4c6edf990e46b8ae1e698c14b907b3020c2276d27a86671ade33cd2c"
+    },
+    "daemon-setup": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/daemon-setup/SKILL.md",
+      "computedHash": "253d1a1ccf1909bbe4c208642eac984a926d1760f1404403f45647cc44cec423"
+    },
+    "daemon-start": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/daemon-start/SKILL.md",
+      "computedHash": "849fd4fe62ab5ee3c25ee6b0192c14b5ab4c882b52def981c9ac2cace59433f0"
+    },
+    "daemon-status": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/daemon-status/SKILL.md",
+      "computedHash": "2959bb7af64f6c50a44a19be330f9abb7519d10aed31215e6e0638db87e32ce5"
+    },
+    "daemon-stop": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/daemon-stop/SKILL.md",
+      "computedHash": "b3c563977efbbf7a64871b608a74bbe9c2e3c781a6baace3e07230b93a9c57d0"
+    },
+    "dashboard-forge": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/web-forge/skills/dashboard-forge/SKILL.md",
+      "computedHash": "89170efcabfef16b5234e45130441061f149aa8c67b6fc92b411b75bcdef1f51"
+    },
+    "dead-code-detector": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quality-tools/skills/dead-code-detector/SKILL.md",
+      "computedHash": "ce99b00ade2f01b296a26315298f70412334fd79cc3648db2406106ceeaa93ff"
+    },
+    "delete-messages": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tlg/skills/delete-messages/SKILL.md",
+      "computedHash": "ae3d3b620f6e2d36131f9b140ba34d9ed75209fed90b1456fe29dace7cffa88f"
+    },
+    "diagnose": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/floating-clock/skills/diagnose/SKILL.md",
+      "computedHash": "d52ab43301d3f649aa4f05b82c5f81b57d8aeda7949affab48767694a8c68059"
+    },
+    "diagnose-hid-keycodes": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/macro-keyboard/skills/diagnose-hid-keycodes/SKILL.md",
+      "computedHash": "907ee169f93644b89c1e01cf48f7cbeae7134215bced942b515c0226ef0e96c7"
+    },
+    "diagnostic-issue-resolver": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tts-tg-sync/skills/diagnostic-issue-resolver/SKILL.md",
+      "computedHash": "bab3509e3ba3c80b9035d93507af108afb16f47a6f4e1cd295707105a2397615"
+    },
+    "disk-hygiene": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/disk-hygiene/SKILL.md",
+      "computedHash": "da1c68c9400329326383e00c2f71ef38129a48c96990ba04d6386f63d4394743"
+    },
+    "distributed-job-safety": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/distributed-job-safety/SKILL.md",
+      "computedHash": "d527cd5c3faca9fd23f237a65e908d9a0f63e6566a45d7393340e1aa67a30673"
+    },
+    "documentation-standards": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/doc-tools/skills/documentation-standards/SKILL.md",
+      "computedHash": "8db44e64e727ca6787f98b4d50e0f697fc8da6c0a50bfe88d84da4a99966ae57"
+    },
+    "doppler-secret-validation": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/doppler-secret-validation/SKILL.md",
+      "computedHash": "230f41bb29790652dd626d61b1a84643c24aa5bc941f1c2f3858e0e96630a319"
+    },
+    "doppler-workflows": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/doppler-workflows/SKILL.md",
+      "computedHash": "444c05dbf9aa91b8353788caac624b3d74032e81f0132c3066df446277eb2fe0"
+    },
+    "download-media": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tlg/skills/download-media/SKILL.md",
+      "computedHash": "daa152a540496dba27cc025ccc97451b8b23da821e75cfe394f6a69d1551d0ce"
+    },
+    "draft-hold": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/notes-commander/skills/draft-hold/SKILL.md",
+      "computedHash": "9b9380aab3f4851e541796195e64f6f55fe52e0cd5666aed91943663468aa4bf"
+    },
+    "draft-message": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tlg/skills/draft-message/SKILL.md",
+      "computedHash": "ee2df5daf7079af71cb488cfb1578368ec8983d0558dcfe4a67f5ad95a5989a8"
+    },
+    "dual-channel-watchexec": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/dual-channel-watchexec/SKILL.md",
+      "computedHash": "b94849216f9f3a0d7c29ec7b3f6f72723b0c939dd90e1b4e42e8f457238b9b1a"
+    },
+    "dump-channel": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tlg/skills/dump-channel/SKILL.md",
+      "computedHash": "43983982057a01fbbb837531d69c4eb977648335fc9858ad804474740733d3c7"
+    },
+    "email-triage": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/gmail-commander/skills/email-triage/SKILL.md",
+      "computedHash": "1b845603b3d558bc183f91c187dfc3012c2346aeae98cb50f456788e94e7b057"
+    },
+    "emergency-priority2-receipt": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/pushover-commander/skills/emergency-priority2-receipt/SKILL.md",
+      "computedHash": "178aad07ab09dd7da282f2d307e8da43fa3599233e3a3221335b5ddd7abd68db"
+    },
+    "emit-fn-key-on-macos": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/macro-keyboard/skills/emit-fn-key-on-macos/SKILL.md",
+      "computedHash": "12c34f77699a67f8e0096ad21deefc3fc842afe30d55b73d3068e25690067fad"
+    },
+    "evolutionary-metric-ranking": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quant-research/skills/evolutionary-metric-ranking/SKILL.md",
+      "computedHash": "ea7f6f174db2f73c51507978b9838633a62ff793fa9d4820204ba509c3530761"
+    },
+    "exchange-session-detector": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quant-research/skills/exchange-session-detector/SKILL.md",
+      "computedHash": "39431255a835284bc1dc83ef17c70a613f2ea260f025cfc0550660b36455a7e0"
+    },
+    "finalize": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/finalize/SKILL.md",
+      "computedHash": "81b43da0066ac1b606181dceb4b95c6021811ac78624734d13c3743c49b6d8b2"
+    },
+    "find-user": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tlg/skills/find-user/SKILL.md",
+      "computedHash": "1b22578979547af17f31ac082d3f9ba3b5991942dfe7d087806c73d131fc0a4b"
+    },
+    "firecrawl-research-patterns": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/firecrawl-research-patterns/SKILL.md",
+      "computedHash": "e8c44ad4732f2f26850439d4413be90e213ea5632fe634f61457db59a2003b52"
+    },
+    "fork-intelligence": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/gh-tools/skills/fork-intelligence/SKILL.md",
+      "computedHash": "1fc9d255fdb4c14c147f98f8c9c8252e1a37402a2bf2ef12205597e9f5e54f65"
+    },
+    "format": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/format/SKILL.md",
+      "computedHash": "d4656e6327ebca1d2133e85ca9fdb857e8de2da94441cf177a3bac007ec9e198"
+    },
+    "forward-message": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tlg/skills/forward-message/SKILL.md",
+      "computedHash": "2e5658136fdbbbf3026d2d2e0c5cff0dba4fff1e8b823329e446c12ac1b03339"
+    },
+    "full-stack-bootstrap": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tts-tg-sync/skills/full-stack-bootstrap/SKILL.md",
+      "computedHash": "078d6f585def786eeae2949b15fff95f5a9f9440b16fdf012d01028bba8eec63"
+    },
+    "full-workflow": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/full-workflow/SKILL.md",
+      "computedHash": "e2bc5e49e8943f6703d9618c035362e47934c9730f98101d3aec77a1a791b632"
+    },
+    "fxview-parquet-consumer": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/mql5/skills/fxview-parquet-consumer/SKILL.md",
+      "computedHash": "0b27d5870d171376a839c955659953b194333a692b58596b109c3500479073c1"
+    },
+    "garch-volatility-toolkit": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/garch-volatility-toolkit/skills/garch-vol-recipes/SKILL.md",
+      "computedHash": "6e01048c6df19ea62128a0649f14708e6165e5b67e8d6c920f7df7464b751d5d"
+    },
+    "gdrive-access": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/productivity-tools/skills/gdrive-access/SKILL.md",
+      "computedHash": "b862d8647fa3fe56cf3ad16492ab20a2975e9119e35221800581e5e678688ba2"
+    },
+    "gemini-deep-research": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/gemini-deep-research/skills/research/SKILL.md",
+      "computedHash": "22ef9504303b237d7df41c4adfbdf0fde010c8499e38e380ef46a4c0595537f4"
+    },
+    "gh-fine-grained-pat": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/gh-tools/skills/gh-fine-grained-pat/SKILL.md",
+      "computedHash": "3ec57b1e2eaf5227a9045a0c52c01189e75b700b09311c2cf300577cfe2e8fcd"
+    },
+    "glm": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/zai/skills/glm/SKILL.md",
+      "computedHash": "54e13e60f6fa9cf94941c7c2cef2b71c1479c94be92eefa5133f9656e70e25a3"
+    },
+    "glossary-management": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/doc-tools/skills/glossary-management/SKILL.md",
+      "computedHash": "1bfe81a7462e9782b0cadec433a32500d5dd504e7cf1ee2a4b69b6bc012bef3c"
+    },
+    "gmail-access": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/gmail-commander/skills/gmail-access/SKILL.md",
+      "computedHash": "c28be25169c6b35f252ff1a4fe0ed67a4d08f9f6ac301751df709db5c857e2f1"
+    },
+    "go": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/itp/skills/go/SKILL.md",
+      "computedHash": "9f404c4065b4b946be394873c3a925b493462a1bb945b3972ed4edb480c30922"
+    },
+    "graph-easy": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/itp/skills/graph-easy/SKILL.md",
+      "computedHash": "f54cf99f3c8fe2b8e3ae5fbf1a5d914f1727d5a43491650f1c657571bf5e3943"
+    },
+    "health": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/calcom-commander/skills/health/SKILL.md",
+      "computedHash": "85c1e0f6cf1cd0409f840aeeb9ec2ad8208360a7a74ec43f4b5169ae0f62fb17"
+    },
+    "health-check": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/pushover-commander/skills/health-check/SKILL.md",
+      "computedHash": "8ba0cc48a03a8e5fe8da494a1048df15b80965b9159e534d6d9b68efb234c680"
+    },
+    "heic-to-jpeg-bundle": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/media-tools/skills/heic-to-jpeg-bundle/SKILL.md",
+      "computedHash": "37d52c6a283ffaee859b573dee7562d1bf1b6e924b1250081787bd16c3d85a8d"
+    },
+    "hooks-development": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/itp-hooks/skills/hooks-development/SKILL.md",
+      "computedHash": "26564f10b64edb52c4265297e385d07a0d86218bef11fb9ca3b51519b9e60d51"
+    },
+    "ignore": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/statusline-tools/skills/ignore/SKILL.md",
+      "computedHash": "577bbfe81d97998de5cf373d0d174f6ac1c00d0efa0cabe69d4ae8feac755a3a"
+    },
+    "imessage-query": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/productivity-tools/skills/imessage-query/SKILL.md",
+      "computedHash": "c0f28fad8cfae83ffc0b96c18408a3286cead2e18a0b124a5ec70cbe8808f297"
+    },
+    "impl-standards": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/itp/skills/impl-standards/SKILL.md",
+      "computedHash": "a8fe12cbd04b2cc4d6025ecddb8d78461f40957427b78b30138ad302d940c590"
+    },
+    "implement-plan-preflight": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/itp/skills/implement-plan-preflight/SKILL.md",
+      "computedHash": "5d97fdcf823f252c257d9b969795fc149a2770db923b930269e5fc8df9fab00e"
+    },
+    "infra-deploy": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/calcom-commander/skills/infra-deploy/SKILL.md",
+      "computedHash": "ee68ea05a2129bced2c33e137265df0bd4668a5d3342b63fefc289ea248b5e20"
+    },
+    "install": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/floating-clock/skills/install/SKILL.md",
+      "computedHash": "9f0ff5e120cf766aaf6935fd98daa2f21a3ca4f9228161299d49d2c72b31d695"
+    },
+    "interactive-bot": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/gmail-commander/skills/interactive-bot/SKILL.md",
+      "computedHash": "55916e2a1c1d833d28c9d82a06a978bd1ac8c4e4cbfe3c19068aeddc2bd8ebb0"
+    },
+    "interactive-json-form": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/html-showcase/skills/interactive-json-form/SKILL.md",
+      "computedHash": "9494d0c6cdf0be15252f0e4177e75bd2dd20f5ca1390b2a7c3552f09dff0fa18"
+    },
+    "issue-create": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/gh-tools/skills/issue-create/SKILL.md",
+      "computedHash": "2a95e286352365d1336414a73d42224bd6050bbd56f6352d651c2f05cc20b1a5"
+    },
+    "issues-workflow": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/gh-tools/skills/issues-workflow/SKILL.md",
+      "computedHash": "29e463b76d6e25dad3023d3fa68f95993ad47e7dff886d611fdeae4e17921a91"
+    },
+    "iterm2-layout": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/productivity-tools/skills/iterm2-layout/SKILL.md",
+      "computedHash": "0fba62b48c27e88756286ad67dd19054e4cf1949c97b1c2b753a15dac48d7149"
+    },
+    "latex-build": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/doc-tools/skills/latex-build/SKILL.md",
+      "computedHash": "396ea63eadf15ced9f2d54c4fbd5fa3910e9ce9bd389df9463b987b2a8fcc9d0"
+    },
+    "latex-setup": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/doc-tools/skills/latex-setup/SKILL.md",
+      "computedHash": "be417f894e218de44edf86ec771f872e536e29977de15ca62d6cadd38052722d"
+    },
+    "latex-tables": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/doc-tools/skills/latex-tables/SKILL.md",
+      "computedHash": "dd26a6c348db0ec6a00ea71d879e1ab5c13056caca32b770260e28f4984c4a82"
+    },
+    "launch": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/floating-clock/skills/launch/SKILL.md",
+      "computedHash": "0071c81fa314c95c3f7b1c9f5527121e636d0edc52bd110bf2c8a518decbfcfe"
+    },
+    "link-validation": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/link-tools/skills/link-validation/SKILL.md",
+      "computedHash": "a7639867d345b56e844654431ba7f58631bb7b07838c0fb00977d9dded7cb056"
+    },
+    "link-validator": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/link-tools/skills/link-validator/SKILL.md",
+      "computedHash": "e0543ec38dd671e2db0a0e6fb7ac37c08343a1b72bc2932979f37ba0fa22d441"
+    },
+    "list-dialogs": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tlg/skills/list-dialogs/SKILL.md",
+      "computedHash": "b4420abec9c53380c461fbe5e41864b78dabaa23fe8cc84ed9ca4f522cdac689"
+    },
+    "list-repo-tasks": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/mise/skills/list-repo-tasks/SKILL.md",
+      "computedHash": "bb9e29ecdcc427ebe9e5c1319a3c325e08103dceaee6159eadaacf6e55bb7498"
+    },
+    "log-reader": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/mql5/skills/log-reader/SKILL.md",
+      "computedHash": "49a5e40ef87e8cf6cceaafb15bc230ade22661fcfde589f7b5ea9759560d8472"
+    },
+    "loop-briefing": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/pushover-commander/skills/loop-briefing/SKILL.md",
+      "computedHash": "53043103415ab3911b165455fed726e8cf238d4867407148fb1407cf7674701c"
+    },
+    "m3": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/minimax/skills/m3/SKILL.md",
+      "computedHash": "5294bfde9472854d96b2e716c89e257bec7651e5057ce688955b704a9fa01086"
+    },
+    "macbook-desktop-mode": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/macbook-desktop-mode/SKILL.md",
+      "computedHash": "c8efbdde4b631fb9f81cfa4f356bbff8bb0dbc219ee1b0781480b78481f532f0"
+    },
+    "macos-fda-grant-helper": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/macos-fda-grant-helper/SKILL.md",
+      "computedHash": "9b31195684a7488877e94f74952e8c2c2b132bfd96f47281aa1424f7e455cf9e"
+    },
+    "macos-font-defaults": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/macos-font-defaults/skills/macos-font-defaults/SKILL.md",
+      "computedHash": "5114cd9086299bcb2612154e71f3b33a05a433a7e62d04a2cbee01c9c9fd6b01"
+    },
+    "manage-apps-and-sounds-headless": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/pushover-commander/skills/manage-apps-and-sounds-headless/SKILL.md",
+      "computedHash": "d9b4ed4be79aa6977d7846385663310ab024230ae1b061bb804c4b381875c45c"
+    },
+    "manage-members": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tlg/skills/manage-members/SKILL.md",
+      "computedHash": "fefe4051809d9b8a8564cccb7ce56caa1f148222db5664ebed368bcc0142f498"
+    },
+    "mark-read": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tlg/skills/mark-read/SKILL.md",
+      "computedHash": "0c620ba2069fc70092c0f864019218d31374adb86310d59a85c5a4a6f4f2c74b"
+    },
+    "markdown-table-validator": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/doc-tools/skills/markdown-table-validator/SKILL.md",
+      "computedHash": "c754f587d9f186cb6601b5980a07351fd88fd797eb67f234909b480b8df59eb2"
     },
     "migrate-to-rsbuild": {
       "source": "rstackjs/agent-skills",
@@ -22,13 +826,259 @@
       "source": "rstackjs/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/migrate-to-rstest/SKILL.md",
-      "computedHash": "aea9f7a54fcbf5b611eec150b0da4b85c6583ff6b943f3ae6dd820c86df6966b"
+      "computedHash": "1ed17338f5aabeeae28763a04611105e1100788dc39682f0f5feebb25de7c7e2"
     },
-    "pr-creator": {
-      "source": "rstackjs/agent-skills",
+    "minimax": {
+      "source": "terrylica/cc-skills",
       "sourceType": "github",
-      "skillPath": "skills/pr-creator/SKILL.md",
-      "computedHash": "a632c60f135594b5ec098ce6196c85395e448ade27882292bf0b68f9192e8278"
+      "skillPath": "plugins/minimax/skills/minimax/SKILL.md",
+      "computedHash": "8c247b713afe0a7c79131594a0fd733affbe2cef3bac43364bcb46869fd4d03c"
+    },
+    "mise-configuration": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/itp/skills/mise-configuration/SKILL.md",
+      "computedHash": "ca60acb79ace55f6039f898c3f3d403d7521cf2c1ada06f7a3bf4bcd22ec76fa"
+    },
+    "mise-tasks": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/itp/skills/mise-tasks/SKILL.md",
+      "computedHash": "ef062f344d8262e40dc7dafd8112a24729549f70ba1174ad4a5f0d4aa2a805cc"
+    },
+    "ml-data-pipeline-architecture": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/ml-data-pipeline-architecture/SKILL.md",
+      "computedHash": "c51380191203ae003280b926c787ddf43af1a18d546af500362abc5024161db7"
+    },
+    "ml-failfast-validation": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/ml-failfast-validation/SKILL.md",
+      "computedHash": "27d1d79fb20511189c49e1b4f757557b50ac2a3e09c7b56e501ad637f774bdc8"
+    },
+    "mlflow-python": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/mlflow-python/SKILL.md",
+      "computedHash": "3f82235981b9a373ce0d0bc28cc746e38a5b0edbd2b24ccb68a07368fc438319"
+    },
+    "monitor-inbox": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/pushover-commander/skills/monitor-inbox/SKILL.md",
+      "computedHash": "82138fd6afde94325cfe2f15cbffee7d8281db106b2ad771b5a4171bbf9c43d7"
+    },
+    "mql5-indicator-patterns": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/mql5/skills/mql5-indicator-patterns/SKILL.md",
+      "computedHash": "964a837c1fe01bb45487044e41c591456e193fe1fed3ccd98161a7387380db68"
+    },
+    "multi-agent-e2e-validation": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quality-tools/skills/multi-agent-e2e-validation/SKILL.md",
+      "computedHash": "39f652e6567348be2ba5a2f4db642e9c6ea6fd8660344aa2011a598711f3afa5"
+    },
+    "multi-agent-performance-profiling": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quality-tools/skills/multi-agent-performance-profiling/SKILL.md",
+      "computedHash": "6d35026f62e80a4eafc61f84c2e72ce7207dee3905c87d55ce53f7d20813f8b0"
+    },
+    "notes-audit": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/notes-commander/skills/notes-audit/SKILL.md",
+      "computedHash": "2e92be40143e644dbc3f8645ae91e333adf7360ae2262b64f946c3a524f3c36b"
+    },
+    "notes-export": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/notes-commander/skills/notes-export/SKILL.md",
+      "computedHash": "876b2855b55bfd6b5a49cafaf1db5abe7caeabb616a7404c39b686c64cf72f40"
+    },
+    "notes-inventory": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/notes-commander/skills/notes-inventory/SKILL.md",
+      "computedHash": "7ea4bdfe4a3f9646301dcb435d2136309760ad44249a34c047eac36af7509791"
+    },
+    "notes-organize": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/notes-commander/skills/notes-organize/SKILL.md",
+      "computedHash": "a6a1ba37dd12e54e137e949943da17176fca3e9a6319e86bf765fd762fbdf692"
+    },
+    "notion-cli": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/productivity-tools/skills/notion-cli/SKILL.md",
+      "computedHash": "6308d18e5d0dca65ecdc8b7eff4478318f6fff09edf4bdd3977157f6cb59ff96"
+    },
+    "notion-sdk": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/productivity-tools/skills/notion-sdk/SKILL.md",
+      "computedHash": "e8bc9c9ceb38997c7fae38e588612e993e2d5c6018335ffcf8424c3b0310ee6d"
+    },
+    "odb-microstructure-forensics": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quant-research/skills/odb-microstructure-forensics/SKILL.md",
+      "computedHash": "ee611f301c55585fda720ae9f9249ba43186658477a62fc7cd12e05a58680da1"
+    },
+    "opendeviation-eval-metrics": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quant-research/skills/opendeviation-eval-metrics/SKILL.md",
+      "computedHash": "8d1a11af8c90dfd5b9a5f8c3902d3299f546592d941f743a613868c70ef4ea2d"
+    },
+    "page-template": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/html-showcase/skills/page-template/SKILL.md",
+      "computedHash": "81c1f3afecb821c01156df98c1826e9fde6c737492e076ab7f17f2214b674876"
+    },
+    "pandoc-pdf-generation": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/doc-tools/skills/pandoc-pdf-generation/SKILL.md",
+      "computedHash": "5372db33c92dbc489e74bd2224def588808643d268f70765cf503df0d70006bc"
+    },
+    "photo-gallery-delivery": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/media-tools/skills/photo-gallery-delivery/SKILL.md",
+      "computedHash": "307aa3164623d7b37240b406b9b4efc159a0b0e5a5400afeda700bd0d61b207d"
+    },
+    "pin-message": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tlg/skills/pin-message/SKILL.md",
+      "computedHash": "d01a100b796e25bc9a9edd5651608f894fe2b4d6d6f1905c41f03f2ee4e99789"
+    },
+    "play": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/play/SKILL.md",
+      "computedHash": "4cbcd75b4c087b9abac613d889cafe751ac66b665b3ee4da14b9070af7bd9147"
+    },
+    "plotext-financial-chart": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/doc-tools/skills/plotext-financial-chart/SKILL.md",
+      "computedHash": "87c14223cc5eaa8a4c507cfda94ffa02b92a1d018ecc296bd53b68702ac43cb2"
+    },
+    "plugin-validator": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/plugin-dev/skills/plugin-validator/SKILL.md",
+      "computedHash": "5ec03f72ba377e517a856c49857da11697ac27047c9ab83456b473f06cd0994b"
+    },
+    "post-session": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/post-session/SKILL.md",
+      "computedHash": "14f9daae1c627a6966495e201854d3fa5030c4bbe4058c8504d77c842c240cd3"
+    },
+    "pr-gfm-validator": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/gh-tools/skills/pr-gfm-validator/SKILL.md",
+      "computedHash": "ff31cf29f48923e6cf39c8e6435f85628110d39216871b5962ac288cc59ffde8"
+    },
+    "pre-ship-review": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quality-tools/skills/pre-ship-review/SKILL.md",
+      "computedHash": "f8c659b1d6bf23531983c792252c8a9edb288af5106df3ed88461bc5352b17a0"
+    },
+    "project-directory-migration": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/project-directory-migration/SKILL.md",
+      "computedHash": "9848d1c66ca15d019dd8ea830c417fbcb4680314bf8cbf7d0ff80a460675ee59"
+    },
+    "pueue-job-orchestration": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/pueue-job-orchestration/SKILL.md",
+      "computedHash": "3dc7c4edcdeb42238bc54954e8f38a9c4fa399e45366f44155fbe00020d25701"
+    },
+    "pypi-doppler": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/itp/skills/pypi-doppler/SKILL.md",
+      "computedHash": "65d0ea251acd961d7b06d4d6442c69ddcba747a42be59fd9fe1520fb3096c85e"
+    },
+    "python-logging-best-practices": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/python-logging-best-practices/SKILL.md",
+      "computedHash": "ac104c49c9282ebb68add56fd5069014e3db811b8432e259fe05a4b94978e570"
+    },
+    "python-memory-safe-scripts": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/python-memory-safe-scripts/SKILL.md",
+      "computedHash": "837e19b9fd051a67cab602ec470b215cb0be496ec84f9f3a42ff10e6db590193"
+    },
+    "python-workspace": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/mql5/skills/python-workspace/SKILL.md",
+      "computedHash": "e9076a16f16d332fe08657f11f24b4c170b20ccec042ff0c7f8616117968464a"
+    },
+    "quench": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/floating-clock/skills/quench/SKILL.md",
+      "computedHash": "501224b911c55096dc7ead75f1ca67acaa1793721b00920f8bafc9199d11ca34"
+    },
+    "query-and-explain": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/graphify-tools/skills/query-and-explain/SKILL.md",
+      "computedHash": "2eac3fa047abd178940f1be2e043eb7edcf603b9ec39816909dad111e29488f5"
+    },
+    "realtime-audio-architecture": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/kokoro-tts/skills/realtime-audio-architecture/SKILL.md",
+      "computedHash": "e28f7e6b29f318f785e9e480518c5ea64e2ab7d4eb7e1c9290a1de417f9af92a"
+    },
+    "record": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/record/SKILL.md",
+      "computedHash": "6f20ed76e780997f73bf967cb374e23f23bcbe3b01cd4ef55b58ad1fdc10f790"
+    },
+    "refactoring-guide": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quality-tools/skills/refactoring-guide/SKILL.md",
+      "computedHash": "1e2bd9967b6ff74d09fcef71e8e5bc9b9f5df1431ae90a8d8dd37ecab12fcc46"
+    },
+    "remove": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/kokoro-tts/skills/remove/SKILL.md",
+      "computedHash": "29923f88a038d9c5f51d68874b196be98cb6260cf6742d79cbd8576c7b3e8082"
+    },
+    "render-incident-report-image": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/pushover-commander/skills/render-incident-report-image/SKILL.md",
+      "computedHash": "630762eb446acbf4cd5421bf63b0d95fa2266946b53a63bc79c3273532efc3a3"
+    },
+    "research-archival": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/gh-tools/skills/research-archival/SKILL.md",
+      "computedHash": "951473058955db8f220438d4c777608e4ce22ecc26130f2631a63bc08753a328"
     },
     "rsbuild-best-practices": {
       "source": "rstackjs/agent-skills",
@@ -46,7 +1096,7 @@
       "source": "rstackjs/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/rsdoctor-analysis/SKILL.md",
-      "computedHash": "1646df360094d3c00e3e37593a579df9ee186c0edb7cb0e116723fe1169041d5"
+      "computedHash": "8ea2196260c6412446cdf40f81e2a2273d269e3c10ba364d8930b44e8bee836b"
     },
     "rslib-best-practices": {
       "source": "rstackjs/agent-skills",
@@ -94,7 +1144,7 @@
       "source": "rstackjs/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/rspress-custom-theme/SKILL.md",
-      "computedHash": "7fe2fa67caabd3336adc635fbe97716d14ff22780d0046237d3b5086e8565277"
+      "computedHash": "1c756906de80e2e2ec24c5442482bf79bb08749b17ba0b0e44b4e00c6854b203"
     },
     "rspress-description-generator": {
       "source": "rstackjs/agent-skills",
@@ -114,16 +1164,250 @@
       "skillPath": "skills/rstest-best-practices/SKILL.md",
       "computedHash": "f0b2092fa4696a8364b0ae15e44fa7752367bac01a2dd1b98223d01ffe001e04"
     },
+    "run-full-release": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/mise/skills/run-full-release/SKILL.md",
+      "computedHash": "a7331fb512c9a195c5ec531661dd7266d752995bfc08bfe91e3a780769b8845f"
+    },
+    "rust-dependency-audit": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/rust-tools/skills/rust-dependency-audit/SKILL.md",
+      "computedHash": "ad2963965dda30b51d7d53eaed8de45ee029c981b56c2e492f72d17a2d424203"
+    },
+    "rust-sota-arsenal": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/rust-tools/skills/rust-sota-arsenal/SKILL.md",
+      "computedHash": "4eef7132d469ab128d3cf9a6a5622231cec58e7e2525f22b6e21b393296e30f3"
+    },
+    "schema-e2e-validation": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quality-tools/skills/schema-e2e-validation/SKILL.md",
+      "computedHash": "4dd533ce8f4d5fe4e2edb1e533fe2e1cf239aba6b5240dd5035674aad9f23ee5"
+    },
+    "scion": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/git-town-workflow/skills/scion/SKILL.md",
+      "computedHash": "9d882e1d90941350dd8aea89e8d08caf1b1544ceb5602337baa30d6139ac6232"
+    },
+    "search-messages": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tlg/skills/search-messages/SKILL.md",
+      "computedHash": "1898e1e9480477d1e51c594db0925e58c82d5e5fd61666be77caadf40bc1ced3"
+    },
     "semantic-release": {
       "source": "terrylica/cc-skills",
       "sourceType": "github",
       "computedHash": "278d64fc2c1405e40f12fc4b32d126e6cb5d36dede9ff3fcedd32a920072bf6b"
+    },
+    "send-media": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tlg/skills/send-media/SKILL.md",
+      "computedHash": "65120728637855399f2dcc0fbf199634fb25d54dd31f0f8f31b5987c4ddae0af"
+    },
+    "send-message": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tlg/skills/send-message/SKILL.md",
+      "computedHash": "239b9ba261d687620e2631a2956be60f187ea363c76e190d2d2874b24ecb0ae1"
+    },
+    "send-notification": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/pushover-commander/skills/send-notification/SKILL.md",
+      "computedHash": "68fe8fd041e549caf8c0c22e199102cb95e34f5ae3c8d526a98a64d39172b7d6"
+    },
+    "server": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/kokoro-tts/skills/server/SKILL.md",
+      "computedHash": "38da41a4581dd5049940c75551985204fc5ac882815ff41f1f7e8ae02e78daac"
+    },
+    "session-chronicle": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/session-chronicle/SKILL.md",
+      "computedHash": "35a8be7fe8ddddade69e1f049ea1d264128e02ad5d8fead67a74ea506f84100b"
+    },
+    "session-debrief": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/session-debrief/SKILL.md",
+      "computedHash": "e51ecf7e5c9efa4182e55ad7530ed4c9a63ea7f2d02d0a5f97d0439904b8cfbd"
+    },
+    "session-info": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/statusline-tools/skills/session-info/SKILL.md",
+      "computedHash": "165b94180e2a8ea84d55ec1b515d0756b52aed7f3830810b3128bfc5cf1926fc"
+    },
+    "session-recovery": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/session-recovery/SKILL.md",
+      "computedHash": "284d07149bac80c431caed0994879d25c96d3b10fc7c743b3329a135367441f2"
+    },
+    "settings-and-tuning": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tts-tg-sync/skills/settings-and-tuning/SKILL.md",
+      "computedHash": "a32ae64cd9a5af5a3fdc6a873a5c50d501212ab438333767430014c63e72847f"
+    },
+    "setup": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/setup/SKILL.md",
+      "computedHash": "8a290446682785e95e363a92e5b9e77e7ddb4b364bc3ed6223e679325a8b71d1"
+    },
+    "sharpe-ratio-non-iid-corrections": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quant-research/skills/sharpe-ratio-non-iid-corrections/SKILL.md",
+      "computedHash": "572aad889a605e87000f20406b0beae62d323ba2931614166f633a7edd09a65a"
+    },
+    "show-env-status": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/mise/skills/show-env-status/SKILL.md",
+      "computedHash": "87513e8c30577801cad4d15c62c740308de8a5d6454a8a1913ba4b2fec173c08"
+    },
+    "skill-architecture": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/plugin-dev/skills/skill-architecture/SKILL.md",
+      "computedHash": "5a19f5b1e911772ecc1922f50a7209e435cb52fb0525bee789968ff4b6aae9a1"
+    },
+    "slash-command-factory": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/productivity-tools/skills/slash-command-factory/SKILL.md",
+      "computedHash": "c12db2dd8ed5f2c3d1fe998869c6910770c1064ad3e1d11ea6f5e2dc72a30a25"
+    },
+    "static-page-stack": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/doc-tools/skills/static-page-stack/SKILL.md",
+      "computedHash": "30fa3d2ba7c384f159aa218a222cb92b219356857140f98c22c8b86aa5d75806"
+    },
+    "status": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/openwolf/skills/status/SKILL.md",
+      "computedHash": "6ae5e2a7502e98ed5836eb7daf2108fb68b1ba23695eaaba668ad5c284dc5c81"
     },
     "storybook-rsbuild": {
       "source": "rstackjs/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/storybook-rsbuild/SKILL.md",
       "computedHash": "b3fe65940d0b70893029f9112352a50a209ff8750c36249fd065faa7791efece"
+    },
+    "summarize": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/summarize/SKILL.md",
+      "computedHash": "2ed9b389c04c6e0fe72e6e787f89369e53ebfcb6388ec808cb3bc7c40588cad1"
+    },
+    "symmetric-dogfooding": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quality-tools/skills/symmetric-dogfooding/SKILL.md",
+      "computedHash": "a226b8863ef245fe21e4334e867356942d0c4b38b1c2389c7904d3dcc7434aa2"
+    },
+    "synthesize": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/kokoro-tts/skills/synthesize/SKILL.md",
+      "computedHash": "ca9033167a7380f1b30f39ebea8090553e0a247ad0533d7782516951370ca5b4"
+    },
+    "telemetry-terminology-similarity": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quality-tools/skills/telemetry-terminology-similarity/SKILL.md",
+      "computedHash": "897a756f7e71d6a148825376865ced14c970c649883c67a251fcc0386d57d9cf"
+    },
+    "terminal-print": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/doc-tools/skills/terminal-print/SKILL.md",
+      "computedHash": "81a55b61c76d86ed42eea8690c7d21f3bd2069c0ee4b5968ee9126575b94a8bc"
+    },
+    "tether": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/asciinema-tools/skills/tether/SKILL.md",
+      "computedHash": "a10f299c3ae2e0b57538894044a727c7de13f89a0c11ef0472f77485f42e44df"
+    },
+    "tick-collection-ops": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/mql5/skills/tick-collection-ops/SKILL.md",
+      "computedHash": "85b94ade8bc0237221fff7e5c1eef24d3bc9840b7e32ef35615b6ed264611953"
+    },
+    "uninstall": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/floating-clock/skills/uninstall/SKILL.md",
+      "computedHash": "0ce2b9e7243a2ec7ef1c623e0e25040ed8413c2b199dce078959c157eecc7d10"
+    },
+    "unlimited-ocr-batch-folder": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/unlimited-ocr/skills/unlimited-ocr-batch-folder/SKILL.md",
+      "computedHash": "7138216bca097760412a8e5721cd8bcf5b715c0ed9013c09156213bbec3c24a1"
+    },
+    "unlimited-ocr-parse-document": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/unlimited-ocr/skills/unlimited-ocr-parse-document/SKILL.md",
+      "computedHash": "922910c371aeb28ec4eed0ce869def0d70916a7cf0cb2a9360fb2081f54df48e"
+    },
+    "unlimited-ocr-segment-figure": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/unlimited-ocr/skills/unlimited-ocr-segment-figure/SKILL.md",
+      "computedHash": "043029486306fa29be94450e71948ae20c5c7d1f3e8fd907ec5f1ba9f881b7c8"
+    },
+    "verbatim-audit-notify": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/pushover-commander/skills/verbatim-audit-notify/SKILL.md",
+      "computedHash": "efa4087b977293b0e9047c1bb627cdf97c325dbd1d0b1de531609a7e0e4b1128"
+    },
+    "voice-quality-audition": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tts-tg-sync/skills/voice-quality-audition/SKILL.md",
+      "computedHash": "38b572931a84103029f7c499e7beffa1ab5bf2eecb0f04eb0a3ad5c18f70daec"
+    },
+    "worktree-manager": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/devops-tools/skills/worktree-manager/SKILL.md",
+      "computedHash": "0147ef61121ebe0a03454e22dc40a72f39cc4847f11c2c1a71733faa6da8dcf9"
+    },
+    "youtube-to-bookplayer": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/media-tools/skills/youtube-to-bookplayer/SKILL.md",
+      "computedHash": "ba22ca0c89ec99f3f2c1d722998f14a49f99c1313574fae4b504541d3f00b62b"
+    },
+    "zai-web-research": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/zai/skills/zai-web-research/SKILL.md",
+      "computedHash": "766a66c50cd6c8d7b506c4c62a4158c032a689243f23094555f50e7df2cc864e"
+    },
+    "zigzag-pattern-classifier": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/quant-research/skills/zigzag-pattern-classifier/SKILL.md",
+      "computedHash": "73e468bf43401b8faeb7963a0ffeed288982e5474752a65be3fa9a748cf1f18b"
     }
   }
 }

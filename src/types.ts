@@ -21,9 +21,19 @@ export interface RspressPluginObsidianWikiLinkOptions {
 	 */
 	enableFuzzyMatching?: boolean;
 	/**
-	 * Enable case-insensitive path and basename fallback. Default: `false`.
+	 * Enable case-insensitive path and basename fallback. Obsidian resolves
+	 * links to existing files case-insensitively, so the default is `true`.
+	 * Set to `false` for strict case-sensitive matching.
 	 */
 	enableCaseInsensitiveLookup?: boolean;
+	/**
+	 * Resolve standard markdown links (`[label](Page.md)`, including
+	 * `#anchor` destinations and the `![alt](note.md)` embed form) against
+	 * the vault index using the same resolution ladder as wikilinks.
+	 * Default: `true`. External URLs, pure anchors, and unresolvable targets
+	 * are left untouched.
+	 */
+	enableMarkdownLinks?: boolean;
 	/**
 	 * Rewrite inline `#tag` tokens into links to `/tags/<tag>`. Default: `false`.
 	 */
@@ -69,6 +79,7 @@ export interface NormalizedPluginOptions {
 	onAmbiguousLink: DiagnosticMode;
 	enableFuzzyMatching: boolean;
 	enableCaseInsensitiveLookup: boolean;
+	enableMarkdownLinks: boolean;
 	enableTagLinking: boolean;
 	enableCallouts: boolean;
 	enableBacklinks: boolean;
@@ -145,7 +156,10 @@ export interface ContentPage {
 	absolutePath: string;
 	relativePath: string;
 	routePath: string;
+	/** Rspress route-oriented key; may collapse an `index.md` suffix. */
 	pathKey: string;
+	/** Exact vault-relative key with only the Markdown extension removed. */
+	filePathKey: string;
 	baseName: string;
 	title?: string;
 	aliases: string[];
@@ -158,7 +172,7 @@ export interface ContentPage {
 	wikilinkTargets: string[];
 	/** Maps slugified heading text → HeadingEntry for O(1) resolution. */
 	headingBySlug: Map<string, HeadingEntry>;
-	/** Maps normalized (lowercased, single-spaced) raw heading text → HeadingEntry. */
+	/** Maps normalized (lowercased, single-spaced) raw heading text → first heading. */
 	headingByText: Map<string, HeadingEntry>;
 	blocks: BlockEntry[];
 }
@@ -173,17 +187,24 @@ export interface ContentIndex {
 	pages: ContentPage[];
 	assets: ContentAsset[];
 	byAbsolutePath: Map<string, ContentPage>;
+	/** Legacy route-oriented lookup retained for callers inspecting Rspress routes. */
 	byPathKey: Map<string, ContentPage>;
+	/** Exact vault-relative page lookup, without route `index` collapsing. */
+	byFilePathKey: Map<string, ContentPage>;
 	byBaseName: Map<string, ContentPage[]>;
 	byTitle: Map<string, ContentPage[]>;
 	byAlias: Map<string, ContentPage[]>;
 	byTag: Map<string, ContentPage[]>;
 	byAssetPath: Map<string, ContentAsset>;
 	byAssetBaseName: Map<string, ContentAsset[]>;
-	/** Case-insensitive pathKey → pages lookup. Populated when `enableFuzzyMatching` is available. */
+	/** Case-insensitive pathKey → pages lookup. */
 	byPathKeyCI: Map<string, ContentPage[]>;
-	/** Case-insensitive basename → pages lookup. Populated when `enableCaseInsensitiveLookup` is available. */
+	/** Case-insensitive exact vault path → pages lookup. */
+	byFilePathKeyCI: Map<string, ContentPage[]>;
+	/** Case-insensitive basename → pages lookup. */
 	byBaseNameCI: Map<string, ContentPage[]>;
+	/** Case-insensitive attachment basename → assets lookup. */
+	byAssetBaseNameCI: Map<string, ContentAsset[]>;
 	/** Raw markdown content keyed by absolute path, used by transclusion during the remark pass. */
 	rawContentByPath: Map<string, string>;
 	/**

@@ -4,6 +4,7 @@ import { rehypeHeaderAnchor } from "@rspress/core/dist/node/mdx/rehypePlugins/he
 import type {
 	Blockquote,
 	HTML,
+	Image,
 	Link,
 	PhrasingContent,
 	Root,
@@ -21,13 +22,15 @@ import { getCachedBacklinksIndex, renderBacklinksHtml } from "./backlinks.ts";
 import { getCachedContentIndex } from "./content-index.ts";
 import { findWikilinkMatches, parseWikiLink } from "./parse-wikilink.ts";
 import { resolveHeadingSlug, resolveWikiLink } from "./resolve-wikilink.ts";
-import { slugifyHeading } from "./slug.ts";
+import { humanizeBaseName, slugifyHeading } from "./slug.ts";
 import { encodeTagPathSegment } from "./tag-pages.ts";
 import type {
 	ContentIndex,
 	ContentPage,
 	NormalizedPluginOptions,
+	ParsedWikiLink,
 	RemarkWikiLinkPluginOptions,
+	ResolvedWikiLink,
 } from "./types.ts";
 import {
 	formatAvailableBlocks,
@@ -49,8 +52,6 @@ const HIGHLIGHT_PATTERN = /==([^=]+)==/g;
 const FOOTNOTE_REF_PATTERN = /(?<!\[)\[\^([^\]]+)\](?!:)/g;
 const FOOTNOTE_DEF_PATTERN = /^\[\^([^\]]+)\]:[ \t]*(.*(?:\n[ \t]{2,}.*)*)$/gm;
 const INLINE_FOOTNOTE_PATTERN = /\^\[([^\]]+)\]/g;
-
-const WIKILINK_EMBED_PATTERN = /!\[\[([^\]]+)\]\]/g;
 
 const MAX_TRANSCLUSION_DEPTH = 5;
 
@@ -249,6 +250,18 @@ async function remarkWikilinkInner(
 	const footnoteSourceMetadata = extractFootnoteSourceMetadata(
 		sourceContent ?? String(file),
 	);
+	const source = sourceContent ?? String(file);
+
+	// Callouts run before every text-level transform: their content paragraphs
+	// are rebuilt from raw source (so markdown titles split the AST without
+	// truncating it), and the passes below then apply to the rebuilt nodes
+	// exactly as they do to the rest of the document. First, any callouts
+	// already claimed by Rspress's built-in alert transform are restored from
+	// source so they get full Obsidian semantics here too.
+	if (options.enableCallouts) {
+		restoreHijackedCallouts(tree, source);
+		processCallouts(tree, currentPage, index, options, source);
+	}
 
 	// Strip Obsidian comments (%% ... %%) before all other transforms.
 	unistVisit(tree, "text", (node, position, parent) => {
@@ -284,7 +297,9 @@ async function remarkWikilinkInner(
 			return;
 		}
 
-		const matches = [...text.matchAll(HIGHLIGHT_PATTERN)];
+		const matches = [...text.matchAll(HIGHLIGHT_PATTERN)].filter(
+			(match) => !isInsideWikilink(text, match.index ?? 0),
+		);
 		if (matches.length === 0) {
 			return;
 		}
@@ -498,7 +513,9 @@ async function remarkWikilinkInner(
 				return;
 			}
 
-			const tags = [...text.matchAll(TAG_PATTERN)];
+			const tags = [...text.matchAll(TAG_PATTERN)].filter(
+				(match) => !isInsideWikilink(text, match.index ?? 0),
+			);
 			if (tags.length === 0) {
 				return;
 			}
@@ -540,10 +557,6 @@ async function remarkWikilinkInner(
 		});
 	}
 
-	if (options.enableCallouts) {
-		processCallouts(tree);
-	}
-
 	if (options.enableMediaEmbeds || options.enableTransclusion) {
 		await processEmbedsInTree(
 			tree,
@@ -558,8 +571,42 @@ async function remarkWikilinkInner(
 		);
 	}
 
+	if (options.enableMarkdownLinks) {
+		await processMarkdownEmbeds(
+			tree,
+			currentPage,
+			index,
+			options,
+			file,
+			docsRoot,
+			visitedOverride ?? new Set([currentPage.absolutePath]),
+			depth,
+		);
+	}
+
 	resolveWikilinksInAst(tree, currentPage, index, options, file);
+	if (options.enableMarkdownLinks) {
+		processMarkdownLinks(tree, currentPage, index, options, file);
+	}
 	emitBlockAnchors(tree, currentPage);
+
+	// Final cleanup: drop paragraphs emptied by earlier transforms (comments,
+	// footnote definitions) and unwrap paragraphs that now contain only raw
+	// block-level HTML nodes (embeds, block anchors). Both would otherwise
+	// serialize with stray empty <p> wrappers around block-level HTML.
+	unistVisit(tree, "paragraph", (node, position, parent) => {
+		if (!parent || typeof position !== "number") return;
+		if (
+			node.children.length === 0 ||
+			node.children.every((child) => child.type === "html")
+		) {
+			(parent as Parent & { children: unknown[] }).children.splice(
+				position,
+				1,
+				...node.children,
+			);
+		}
+	});
 
 	// Only the top-level pass (depth 0) may fail the file: a broken link must
 	// not abort resolution of the remaining wikilinks, so failure is raised
@@ -620,6 +667,291 @@ async function renderTranscludedHtml(
 	return htmlProcessor.stringify(hastTree);
 }
 
+interface PageEmbedContext {
+	options: NormalizedPluginOptions;
+	file: VFile;
+	docsRoot: string;
+	currentPage: ContentPage;
+	visited: Set<string>;
+	depth: number;
+}
+
+/**
+ * Render a resolved page embed — `![[Page]]`, `![[Page#Section]]`, or the
+ * markdown form `![alt](Page.md)` — as a transclusion node shared by both
+ * embed syntaxes.
+ *
+ * A missing heading or block section renders as an embed link to the page,
+ * matching Obsidian, which shows unresolved embeds as links rather than
+ * inlining the entire page.
+ */
+async function renderPageEmbed(
+	parsedEmbed: ParsedWikiLink,
+	resolved: ResolvedWikiLink,
+	ctx: PageEmbedContext,
+): Promise<PhrasingContent> {
+	const { targetPage } = resolved;
+	if (!targetPage) {
+		return createTextNode(parsedEmbed.raw);
+	}
+
+	if (ctx.visited.has(targetPage.absolutePath)) {
+		ctx.file.message(
+			`[rspress-plugin-obsidian-wikilink:transclusion] Circular transclusion detected: ${parsedEmbed.raw} in "${ctx.currentPage.relativePath}".`,
+		);
+		return createTextNode(parsedEmbed.raw);
+	}
+	if (ctx.depth >= MAX_TRANSCLUSION_DEPTH) {
+		ctx.file.message(
+			`[rspress-plugin-obsidian-wikilink:transclusion] Max transclusion depth (${MAX_TRANSCLUSION_DEPTH}) reached for ${parsedEmbed.raw} in "${ctx.currentPage.relativePath}".`,
+		);
+		return createTextNode(parsedEmbed.raw);
+	}
+
+	try {
+		const content = await fs.promises.readFile(
+			targetPage.absolutePath,
+			"utf-8",
+		);
+		let transcludedContent: string | undefined;
+
+		if (parsedEmbed.subpath) {
+			if (parsedEmbed.subpath.kind === "heading") {
+				const headingSlug = resolveHeadingSlug(
+					targetPage,
+					parsedEmbed.subpath.value,
+				);
+				if (headingSlug !== undefined) {
+					transcludedContent = extractHeadingSection(content, headingSlug);
+				}
+			} else if (parsedEmbed.subpath.kind === "block") {
+				transcludedContent = extractBlockSection(
+					content,
+					parsedEmbed.subpath.value,
+				);
+			}
+
+			if (transcludedContent === undefined) {
+				const suffix =
+					parsedEmbed.subpath.kind === "heading"
+						? formatAvailableHeadings(targetPage)
+						: formatAvailableBlocks(targetPage);
+				ctx.file.message(
+					`[rspress-plugin-obsidian-wikilink:transclusion] ${parsedEmbed.subpath.kind === "heading" ? "Heading" : "Block"} "${parsedEmbed.subpath.value}" not found in "${targetPage.relativePath}" for ${parsedEmbed.raw};${suffix} rendering as a link to the page.`,
+				);
+				return createEmbedNode(
+					targetPage.routePath,
+					parsedEmbed.alias ?? humanizeBaseName(targetPage.baseName),
+				);
+			}
+		}
+
+		if (transcludedContent === undefined) {
+			transcludedContent = stripFrontmatter(content);
+		}
+
+		const transcludedHtml = await renderTranscludedHtml(
+			transcludedContent,
+			ctx.options,
+			ctx.file,
+			ctx.docsRoot,
+			targetPage.absolutePath,
+			new Set([...ctx.visited, targetPage.absolutePath]),
+			ctx.depth + 1,
+		);
+
+		return {
+			type: "html",
+			value: `<div class="obsidian-transclusion" data-src="${escapeHtmlAttribute(resolved.href ?? "")}">\n${transcludedHtml}\n</div>`,
+		};
+	} catch (error) {
+		ctx.file.message(
+			`[rspress-plugin-obsidian-wikilink:transclusion] Failed to read "${targetPage.relativePath}" for ${parsedEmbed.raw}: ${error instanceof Error ? error.message : String(error)}`,
+		);
+		return createTextNode(parsedEmbed.raw);
+	}
+}
+
+function isExternalUrl(url: string): boolean {
+	return /^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith("//");
+}
+
+/**
+ * Build a {@link ParsedWikiLink} from a standard markdown link destination.
+ *
+ * Only `.md` / `.mdx` file references are considered — Obsidian's
+ * autocomplete emits that form, and anything else (external URLs, pure
+ * `#anchors`, extensionless routes) belongs to Rspress's own link handling.
+ * Percent-encoded destinations are decoded before resolution.
+ */
+function parseMarkdownLinkUrl(
+	url: string,
+	raw: string,
+	isEmbed: boolean,
+): ParsedWikiLink | undefined {
+	if (!url || isExternalUrl(url) || url.startsWith("#")) {
+		return undefined;
+	}
+
+	let decoded = url;
+	try {
+		decoded = decodeURIComponent(url);
+	} catch {
+		// keep the raw form when the destination is not valid percent-encoding
+	}
+
+	const hashIndex = decoded.indexOf("#");
+	const pathPart = (
+		hashIndex >= 0 ? decoded.slice(0, hashIndex) : decoded
+	).trim();
+	if (!/\.(md|mdx)$/i.test(pathPart)) {
+		return undefined;
+	}
+
+	const anchor =
+		hashIndex >= 0 ? decoded.slice(hashIndex + 1).trim() : undefined;
+	const subpath = anchor
+		? anchor.startsWith("^")
+			? { kind: "block" as const, value: anchor.slice(1).trim() }
+			: { kind: "heading" as const, value: anchor }
+		: undefined;
+
+	return {
+		raw,
+		target: pathPart.replace(/\.(md|mdx)$/i, ""),
+		isEmbed,
+		subpath,
+		isCurrentPageReference: false,
+	};
+}
+
+/**
+ * Rewrite standard markdown links whose destination is a vault page —
+ * `[label](Page.md)`, `[label](./relative.md)`, `[label](Page.md#Heading)` —
+ * to the resolved route, using the same resolution ladder as wikilinks
+ * (path, basename, title/alias, case-insensitive, fuzzy). Unresolvable
+ * destinations are reported through `onBrokenLink` — this plugin owns that
+ * diagnostic for `.md` links because it disables Rspress's dead-link gate
+ * when markdown-link resolution is enabled.
+ */
+function processMarkdownLinks(
+	tree: Root,
+	currentPage: ContentPage,
+	index: ContentIndex,
+	options: NormalizedPluginOptions,
+	file: VFile,
+): void {
+	const resolveOptions = {
+		enableFuzzyMatching: options.enableFuzzyMatching,
+		enableCaseInsensitiveLookup: options.enableCaseInsensitiveLookup,
+	};
+
+	unistVisit(tree, "link", (node: Link) => {
+		const parsed = parseMarkdownLinkUrl(node.url, `[…](${node.url})`, false);
+		if (!parsed) {
+			return;
+		}
+
+		const resolved = resolveWikiLink(parsed, {
+			currentPage,
+			index,
+			options: resolveOptions,
+		});
+		if (resolved.status === "ok") {
+			if (resolved.href) {
+				node.url = resolved.href;
+			}
+		} else {
+			reportDiagnostic(
+				file,
+				`[…](${node.url})`,
+				resolved.message ?? "Unable to resolve markdown link.",
+				resolved.status,
+				options,
+			);
+		}
+	});
+}
+
+/**
+ * Resolve markdown embeds of vault pages — `![alt](note.md)` — the form
+ * Obsidian transcludes identically to `![[note]]`. With transclusion
+ * enabled the page is inlined; otherwise the embed becomes a styled link,
+ * mirroring how non-transcluded `![[Page]]` wikilinks behave.
+ */
+async function processMarkdownEmbeds(
+	tree: Root,
+	currentPage: ContentPage,
+	index: ContentIndex,
+	options: NormalizedPluginOptions,
+	file: VFile,
+	docsRoot: string,
+	visited: Set<string>,
+	depth: number,
+): Promise<void> {
+	const resolveOptions = {
+		enableFuzzyMatching: options.enableFuzzyMatching,
+		enableCaseInsensitiveLookup: options.enableCaseInsensitiveLookup,
+	};
+
+	interface EmbedWork {
+		node: Image;
+		position: number;
+		parent: Parent;
+	}
+	const work: EmbedWork[] = [];
+
+	unistVisit(tree, "image", (node, position, parent) => {
+		if (!parent || typeof position !== "number") return;
+		if (!/\.(md|mdx)([#?]|$)/i.test(node.url)) return;
+		work.push({ node: node as Image, position, parent });
+	});
+
+	for (const { node, position, parent } of work) {
+		const raw = `![${node.alt ?? ""}](${node.url})`;
+		const parsed = parseMarkdownLinkUrl(node.url, raw, true);
+		if (!parsed) continue;
+
+		const resolved = resolveWikiLink(parsed, {
+			currentPage,
+			index,
+			options: resolveOptions,
+		});
+		if (resolved.status !== "ok" || !resolved.targetPage) {
+			if (resolved.status !== "ok") {
+				reportDiagnostic(
+					file,
+					raw,
+					resolved.message ?? "Unable to resolve markdown embed.",
+					resolved.status,
+					options,
+				);
+			}
+			continue;
+		}
+
+		const replacement: PhrasingContent = options.enableTransclusion
+			? await renderPageEmbed(parsed, resolved, {
+					options,
+					file,
+					docsRoot,
+					currentPage,
+					visited,
+					depth,
+				})
+			: createEmbedNode(
+					resolved.href ?? resolved.targetPage.routePath,
+					node.alt ?? humanizeBaseName(resolved.targetPage.baseName),
+				);
+
+		(parent as Parent & { children: PhrasingContent[] }).children.splice(
+			position,
+			1,
+			replacement,
+		);
+	}
+}
+
 async function processEmbedsInTree(
 	tree: Root,
 	currentPage: ContentPage,
@@ -648,7 +980,9 @@ async function processEmbedsInTree(
 		if (!parent || typeof position !== "number") return;
 		if (SKIP_PARENT_TYPES.has(parent.type)) return;
 		if (!node.value.includes("![")) return;
-		const embedMatches = [...node.value.matchAll(WIKILINK_EMBED_PATTERN)];
+		const embedMatches = findWikilinkMatches(node.value).filter((match) =>
+			match.fullMatch.startsWith("!["),
+		);
 		if (embedMatches.length > 0) {
 			embedNodes.push({ node, position, parent });
 		}
@@ -658,24 +992,25 @@ async function processEmbedsInTree(
 	// building AST nodes (text + html) instead of a raw HTML string.
 	for (const { node, position, parent } of embedNodes) {
 		const text = node.value;
-		const embedMatches = [...text.matchAll(WIKILINK_EMBED_PATTERN)];
+		const embedMatches = findWikilinkMatches(text).filter((match) =>
+			match.fullMatch.startsWith("!["),
+		);
 		if (embedMatches.length === 0) continue;
 
 		const replacementNodes: PhrasingContent[] = [];
 		let lastEnd = 0;
 
 		for (const match of embedMatches) {
-			const start = match.index ?? 0;
-			const fullMatch = match[0];
-			const inner = match[1] ?? "";
+			const start = match.start;
+			const fullMatch = match.fullMatch;
+			const inner = match.inner;
 
 			if (start > lastEnd) {
 				replacementNodes.push(createTextNode(text.slice(lastEnd, start)));
 			}
 
 			const parsedEmbed = parseWikiLink(inner, fullMatch);
-			const pipeIdx = inner.indexOf("|");
-			const sizeParam = pipeIdx >= 0 ? inner.slice(pipeIdx + 1) : "";
+			const sizeParam = parsedEmbed.alias ?? "";
 			const target = parsedEmbed.target;
 			const fragment = parsedEmbed.subpath
 				? `#${parsedEmbed.subpath.value}`
@@ -683,6 +1018,9 @@ async function processEmbedsInTree(
 			const ext = target.split(".").pop()?.toLowerCase() ?? "";
 			if (options.enableMediaEmbeds && IMAGE_EXTS.has(ext)) {
 				const sizeAttr = parseSizeAttr(sizeParam);
+				// Obsidian treats a numeric pipe as a size; any other pipe text
+				// is alt/caption text for the image.
+				const altText = sizeAttr ? target : sizeParam.trim() || target;
 				const resolved = resolveMediaSrc(target, docsRoot, currentFilePath);
 				if (!resolved.found) {
 					file.message(
@@ -692,7 +1030,7 @@ async function processEmbedsInTree(
 				const src = escapeHtmlAttribute(`${resolved.url}${fragment}`);
 				replacementNodes.push({
 					type: "html",
-					value: `<img src="${src}" alt="${escapeHtmlAttribute(target)}"${sizeAttr} loading="lazy" />`,
+					value: `<img src="${src}" alt="${escapeHtmlAttribute(altText)}"${sizeAttr} loading="lazy" />`,
 				});
 			} else if (options.enableMediaEmbeds && AUDIO_EXTS.has(ext)) {
 				const resolved = resolveMediaSrc(target, docsRoot, currentFilePath);
@@ -741,80 +1079,16 @@ async function processEmbedsInTree(
 				});
 
 				if (resolved.status === "ok" && resolved.targetPage) {
-					if (visited.has(resolved.targetPage.absolutePath)) {
-						file.message(
-							`[rspress-plugin-obsidian-wikilink:transclusion] Circular transclusion detected: ${fullMatch} in "${currentPage.relativePath}".`,
-						);
-						replacementNodes.push(createTextNode(fullMatch));
-					} else if (depth >= MAX_TRANSCLUSION_DEPTH) {
-						file.message(
-							`[rspress-plugin-obsidian-wikilink:transclusion] Max transclusion depth (${MAX_TRANSCLUSION_DEPTH}) reached for ${fullMatch} in "${currentPage.relativePath}".`,
-						);
-						replacementNodes.push(createTextNode(fullMatch));
-					} else {
-						try {
-							const content = await fs.promises.readFile(
-								resolved.targetPage.absolutePath,
-								"utf-8",
-							);
-							const parsed = parsedEmbed;
-							let transcludedContent: string | undefined;
-
-							if (parsed.subpath) {
-								if (parsed.subpath.kind === "heading") {
-									const headingSlug = resolveHeadingSlug(
-										resolved.targetPage,
-										parsed.subpath.value,
-									);
-									if (headingSlug !== undefined) {
-										transcludedContent = extractHeadingSection(
-											content,
-											headingSlug,
-										);
-									}
-								} else if (parsed.subpath.kind === "block") {
-									transcludedContent = extractBlockSection(
-										content,
-										parsed.subpath.value,
-									);
-								}
-
-								if (transcludedContent === undefined) {
-									const suffix =
-										parsed.subpath.kind === "heading"
-											? formatAvailableHeadings(resolved.targetPage)
-											: formatAvailableBlocks(resolved.targetPage);
-									file.message(
-										`[rspress-plugin-obsidian-wikilink:transclusion] ${parsed.subpath.kind === "heading" ? "Heading" : "Block"} "${parsed.subpath.value}" not found in "${resolved.targetPage.relativePath}" for ${fullMatch};${suffix} falling back to full page content.`,
-									);
-								}
-							}
-
-							if (transcludedContent === undefined) {
-								transcludedContent = stripFrontmatter(content);
-							}
-
-							const transcludedHtml = await renderTranscludedHtml(
-								transcludedContent,
-								options,
-								file,
-								docsRoot,
-								resolved.targetPage.absolutePath,
-								new Set([...visited, resolved.targetPage.absolutePath]),
-								depth + 1,
-							);
-
-							replacementNodes.push({
-								type: "html",
-								value: `<div class="obsidian-transclusion" data-src="${escapeHtmlAttribute(resolved.href ?? "")}">\n${transcludedHtml}\n</div>`,
-							});
-						} catch (error) {
-							file.message(
-								`[rspress-plugin-obsidian-wikilink:transclusion] Failed to read "${resolved.targetPage.relativePath}" for ${fullMatch}: ${error instanceof Error ? error.message : String(error)}`,
-							);
-							replacementNodes.push(createTextNode(fullMatch));
-						}
-					}
+					replacementNodes.push(
+						await renderPageEmbed(parsedEmbed, resolved, {
+							options,
+							file,
+							docsRoot,
+							currentPage,
+							visited,
+							depth,
+						}),
+					);
 				} else {
 					replacementNodes.push(createTextNode(fullMatch));
 				}
@@ -843,6 +1117,21 @@ function getCurrentFilePath(file: VFile): string | undefined {
 	const pathFromFile =
 		typeof file.path === "string" ? file.path : file.history.at(-1);
 	return pathFromFile ? normalizeFsPath(pathFromFile) : undefined;
+}
+
+/**
+ * True when `index` falls inside a `[[...]]` / `![[...]]` span of `text`.
+ * Keeps text-level transforms (tags, highlights) from firing inside wikilink
+ * targets and aliases, where `#anchor` and `==text==` belong to the link, not
+ * the surrounding prose.
+ */
+function isInsideWikilink(text: string, index: number): boolean {
+	for (const match of findWikilinkMatches(text)) {
+		if (index >= match.start && index < match.end) {
+			return true;
+		}
+	}
+	return false;
 }
 
 function createTextNode(value: string): Text {
@@ -1037,6 +1326,177 @@ function resolveMediaSrc(
 	};
 }
 
+// The marker Rspress's built-in GitHub-style alert transform (its internal
+// remarkContainerSyntax plugin) uses for the containerDirective nodes it
+// creates, and the callout types it claims.
+const RSPRESS_CALLOUT_COMPONENT = "$$$callout$$$";
+const RSPRESS_CALLOUT_TYPES = new Set([
+	"tip",
+	"note",
+	"warning",
+	"caution",
+	"danger",
+	"info",
+	"details",
+]);
+
+interface RspressCalloutContainer {
+	type: "containerDirective";
+	name?: string;
+	attributes?: { type?: string; title?: string };
+	children: Root["children"];
+	position?: { start?: { line?: number }; end?: { line?: number } };
+}
+
+interface NodeWithLine {
+	position?: { start?: { line?: number }; end?: { line?: number } };
+	children?: NodeWithLine[];
+}
+
+/**
+ * Restore blockquote callouts that Rspress's built-in GitHub-style alert
+ * transform has already claimed.
+ *
+ * Rspress registers remarkContainerSyntax before plugin remark plugins, so
+ * `> [!note]` blockquotes for note/tip/warning/caution/danger/info/details
+ * arrive here already converted to `$$$callout$$$` containerDirective nodes —
+ * with the fold suffix leaked into the content and the first paragraph of
+ * multi-paragraph alerts dropped entirely.
+ *
+ * The converted nodes keep their original source positions, so each one can
+ * be verified against the raw source: walk up from its first positioned
+ * child through the contiguous `>`-prefixed lines and check that the range
+ * starts with a `[!type]` header matching the container's type. That
+ * distinguishes GitHub-alert origin from `:::type` containers (whose source
+ * lines are not `>`-prefixed), which keep Rspress's native rendering.
+ * Verified nodes are replaced with the blockquote re-parsed from the
+ * original source — recovering the header, fold state, and any dropped
+ * content — and are then transformed by {@link processCallouts} like any
+ * other callout.
+ */
+function restoreHijackedCallouts(tree: Root, source: string): void {
+	const sourceLines = source.split(/\r?\n/);
+
+	interface Candidate {
+		node: RspressCalloutContainer;
+		parent: Parent & { children: Root["children"] };
+		startLine: number;
+		endLine: number;
+	}
+	const candidates: Candidate[] = [];
+	const parents = new WeakMap<object, Parent>();
+
+	// Collect hijacked containers with the source line range they cover.
+	// Only the topmost ones are restored: replacing an outer container
+	// re-parses its nested callouts from source too.
+	unistVisit(tree, "containerDirective", (rawNode, _position, parent) => {
+		const node = rawNode as RspressCalloutContainer;
+		if (parent) {
+			parents.set(node, parent);
+		}
+		if (
+			!parent ||
+			node.name !== RSPRESS_CALLOUT_COMPONENT ||
+			!node.attributes?.type ||
+			!RSPRESS_CALLOUT_TYPES.has(node.attributes.type)
+		) {
+			return;
+		}
+
+		let startLine = Number.POSITIVE_INFINITY;
+		let endLine = 0;
+		const scan = (current: NodeWithLine): void => {
+			const line = current.position?.start?.line;
+			const end = current.position?.end?.line;
+			if (typeof line === "number" && line < startLine) {
+				startLine = line;
+			}
+			if (typeof end === "number" && end > endLine) {
+				endLine = end;
+			}
+			for (const child of current.children ?? []) {
+				scan(child);
+			}
+		};
+		scan(node);
+		if (
+			!Number.isFinite(startLine) ||
+			endLine <= 0 ||
+			startLine > sourceLines.length ||
+			endLine > sourceLines.length
+		) {
+			return;
+		}
+
+		// Walk up through the contiguous blockquote lines covering the first
+		// positioned child.
+		let headerIndex = startLine - 1;
+		while (
+			headerIndex > 0 &&
+			(sourceLines[headerIndex - 1] ?? "").trimStart().startsWith(">")
+		) {
+			headerIndex -= 1;
+		}
+
+		const headerLine = (sourceLines[headerIndex] ?? "").replace(
+			/^(?:\s*>+)+\s*/,
+			"",
+		);
+		const headerMatch = /^\[!(\w+)\]/.exec(headerLine);
+		if (
+			!headerMatch ||
+			headerMatch[1]?.toLowerCase() !== node.attributes.type
+		) {
+			return;
+		}
+
+		candidates.push({
+			node,
+			parent: parent as Parent & { children: Root["children"] },
+			startLine: headerIndex + 1,
+			endLine,
+		});
+	});
+
+	for (const candidate of candidates) {
+		// Skip candidates nested inside another restored container.
+		let ancestor = parents.get(candidate.node);
+		let nested = false;
+		while (ancestor) {
+			if (candidates.some((c) => c.node === ancestor)) {
+				nested = true;
+				break;
+			}
+			ancestor = parents.get(ancestor);
+		}
+		if (nested) {
+			continue;
+		}
+
+		const blockquoteSource = sourceLines
+			.slice(candidate.startLine - 1, candidate.endLine)
+			.join("\n");
+		// Leading blank lines keep the re-parsed positions aligned with the
+		// original source lines.
+		const fragment = `${"\n".repeat(candidate.startLine - 1)}${blockquoteSource}`;
+		const parsed = unified()
+			.use(remarkParse)
+			.use(remarkGfm)
+			.parse(fragment) as Root;
+		if (parsed.children.length === 0) {
+			continue;
+		}
+
+		const index = candidate.parent.children.indexOf(
+			candidate.node as unknown as Root["children"][number],
+		);
+		if (index < 0) {
+			continue;
+		}
+		candidate.parent.children.splice(index, 1, ...parsed.children);
+	}
+}
+
 /**
  * Find and process all callout blockquotes in the tree, processing
  * innermost callouts first so that nested callouts are fully resolved
@@ -1046,8 +1506,19 @@ function resolveMediaSrc(
  * breaks nesting because replacing the outer blockquote removes the inner
  * one from the traversal. This two-phase approach (collect first, then
  * process in reverse) ensures correct nesting order.
+ *
+ * Header lines are recovered from `source` via node positions rather than
+ * from the first text node: inline markdown in a title splits the paragraph
+ * into multiple inline nodes, so the text node alone would truncate the
+ * title and lose continuation lines.
  */
-function processCallouts(tree: Root): void {
+function processCallouts(
+	tree: Root,
+	currentPage: ContentPage,
+	index: ContentIndex,
+	options: NormalizedPluginOptions,
+	source: string,
+): void {
 	interface CalloutEntry {
 		bq: Blockquote;
 		position: number;
@@ -1055,22 +1526,37 @@ function processCallouts(tree: Root): void {
 	}
 
 	const stack: CalloutEntry[] = [];
+	const sourceLines = source.split(/\r?\n/);
+
+	// Strip leading blockquote markers (one or more levels) from a source line.
+	const stripQuoteMarker = (line: string): string =>
+		line.replace(/^(?:\s*>+)+\s*/, "");
+
+	const headerLineOf = (bq: Blockquote): string | undefined => {
+		const firstPara = bq.children[0];
+		const line = firstPara?.position?.start.line;
+		if (typeof line === "number" && line >= 1 && line <= sourceLines.length) {
+			return stripQuoteMarker(sourceLines[line - 1] ?? "");
+		}
+
+		// Position fallback for synthesized ASTs: use the first text node.
+		if (firstPara?.type !== "paragraph") {
+			return undefined;
+		}
+		const firstText = firstPara.children.find(
+			(c): c is Text => c.type === "text",
+		);
+		return firstText?.value.split("\n")[0];
+	};
 
 	unistVisit(tree, "blockquote", (node, position, parent) => {
 		if (!parent || typeof position !== "number") return;
 
 		const bq = node as Blockquote;
-		const firstPara = bq.children[0];
-		if (firstPara?.type !== "paragraph") return;
+		if (bq.children[0]?.type !== "paragraph") return;
 
-		const firstText = firstPara.children.find(
-			(c): c is Text => c.type === "text",
-		);
-		if (!firstText) return;
-
-		const lines = firstText.value.split("\n");
-		const headerLine = lines[0] ?? "";
-		if (!CALLOUT_HEADER_PATTERN.exec(headerLine)) return;
+		const headerLine = headerLineOf(bq);
+		if (!headerLine || !CALLOUT_HEADER_PATTERN.exec(headerLine)) return;
 
 		stack.push({
 			bq,
@@ -1086,14 +1572,10 @@ function processCallouts(tree: Root): void {
 		const firstPara = bq.children[0];
 		if (firstPara?.type !== "paragraph") continue;
 
-		const firstText = firstPara.children.find(
-			(c): c is Text => c.type === "text",
-		);
-		if (!firstText) continue;
-
-		const lines = firstText.value.split("\n");
-		const headerLine = lines[0] ?? "";
-		const calloutMatch = CALLOUT_HEADER_PATTERN.exec(headerLine);
+		const headerLine = headerLineOf(bq);
+		const calloutMatch = headerLine
+			? CALLOUT_HEADER_PATTERN.exec(headerLine)
+			: null;
 		if (!calloutMatch) continue;
 
 		const rawType = calloutMatch[1]?.toLowerCase() ?? "note";
@@ -1101,16 +1583,54 @@ function processCallouts(tree: Root): void {
 		const foldState = calloutMatch[2];
 		const calloutTitle = calloutMatch[3]?.trim() || rawType;
 
-		const remainingLines = lines.slice(1);
-		if (remainingLines.length === 0) {
-			bq.children.shift();
+		// Strip the header line from the opening paragraph, keeping any
+		// continuation lines as the callout's first content block. The
+		// paragraph is rebuilt from source so markdown in the title does not
+		// leak into the content (and vice versa).
+		const startLine = firstPara.position?.start.line;
+		const endLine = firstPara.position?.end.line;
+		if (
+			typeof startLine === "number" &&
+			typeof endLine === "number" &&
+			startLine >= 1 &&
+			endLine <= sourceLines.length
+		) {
+			const contentLines = sourceLines
+				.slice(startLine, endLine)
+				.map(stripQuoteMarker);
+			const reParsed = unified().use(remarkParse).parse(contentLines.join("\n"))
+				.children as typeof bq.children;
+			if (reParsed.length === 0) {
+				bq.children.shift();
+			} else {
+				bq.children.splice(0, 1, ...reParsed);
+			}
 		} else {
-			firstText.value = remainingLines.join("\n");
+			// Fallback for positionless ASTs: operate on the first text node.
+			const firstText = firstPara.children.find(
+				(c): c is Text => c.type === "text",
+			);
+			if (!firstText) continue;
+			const remainingLines = firstText.value.split("\n").slice(1);
+			if (remainingLines.length === 0) {
+				bq.children.shift();
+			} else {
+				firstText.value = remainingLines.join("\n");
+			}
 		}
+
+		// Obsidian renders callout titles as inline markdown (and resolves
+		// wikilinks in them), so render before escaping into the title element.
+		const titleHtml = renderCalloutTitleHtml(
+			calloutTitle,
+			currentPage,
+			index,
+			options,
+		);
 
 		const replacements: Root["children"] = buildCalloutNodes(
 			calloutType,
-			calloutTitle,
+			titleHtml,
 			foldState,
 			bq.children as Root["children"],
 		);
@@ -1121,16 +1641,17 @@ function processCallouts(tree: Root): void {
 /**
  * Build the replacement AST nodes for an Obsidian callout.
  * Foldable callouts (+ expanded, - collapsed) use <details>/<summary>.
- * Static callouts use <div> elements.
+ * Static callouts use <div> elements. `titleHtml` must already be
+ * renderer-produced HTML (see {@link renderCalloutTitleHtml}), never raw
+ * user text.
  */
 function buildCalloutNodes(
 	calloutType: string,
-	calloutTitle: string,
+	titleHtml: string,
 	foldState: string | undefined,
 	contentChildren: Root["children"],
 ): Root["children"] {
 	const escapedType = escapeHtmlAttribute(calloutType);
-	const escapedTitle = escapeHtmlText(calloutTitle);
 
 	if (foldState) {
 		const openAttr = foldState === "+" ? " open" : "";
@@ -1140,7 +1661,7 @@ function buildCalloutNodes(
 		};
 		const summaryTag: HTML = {
 			type: "html",
-			value: `<summary class="callout-title">${escapedTitle}</summary>`,
+			value: `<summary class="callout-title">${titleHtml}</summary>`,
 		};
 		if (contentChildren.length > 0) {
 			return [
@@ -1165,7 +1686,7 @@ function buildCalloutNodes(
 	};
 	const titleDiv: HTML = {
 		type: "html",
-		value: `<div class="callout-title">${escapedTitle}</div>`,
+		value: `<div class="callout-title">${titleHtml}</div>`,
 	};
 	if (contentChildren.length > 0) {
 		return [
@@ -1182,6 +1703,127 @@ function buildCalloutNodes(
 		titleDiv,
 		{ type: "html", value: '<div class="callout-content"></div></div>' },
 	];
+}
+
+/**
+ * Render a callout title — a single line of inline markdown — to HTML.
+ *
+ * Wikilinks inside the title are resolved first so `[[Page|Alias]]` titles
+ * link the way they do in Obsidian. remark-rehype runs without
+ * `allowDangerousHtml`, so any raw HTML in the title is dropped and text is
+ * entity-escaped by rehype-stringify: the returned markup is safe to embed
+ * in the title element.
+ */
+function renderCalloutTitleHtml(
+	title: string,
+	currentPage: ContentPage,
+	index: ContentIndex,
+	options: NormalizedPluginOptions,
+): string {
+	const withLinks = resolveTitleWikilinks(title, currentPage, index, options);
+
+	// ==highlights== are Obsidian syntax, not markdown, so each highlighted
+	// span is rendered separately and wrapped in <mark>. Edge whitespace is
+	// re-attached around the rendered cores because inline markdown parsing
+	// trims it. Skipped when the title contains a code span, where `==` may
+	// be literal text.
+	if (withLinks.includes("==") && !withLinks.includes("`")) {
+		const parts = withLinks.split(/(==[^=]+==)/).filter(Boolean);
+		const highlighted = parts
+			.map((part) => {
+				const leading = /^[ \t]+/.exec(part)?.[0] ?? "";
+				const trailing = /[ \t]+$/.exec(part)?.[0] ?? "";
+				const match = /^==([^=]+)==$/.exec(part);
+				const core = match?.[1]
+					? `<mark>${renderInlineMarkdownHtml(match[1])}</mark>`
+					: renderInlineMarkdownHtml(part);
+				return `${leading}${core}${trailing}`;
+			})
+			.join("");
+		if (highlighted) {
+			return highlighted;
+		}
+	}
+
+	return renderInlineMarkdownHtml(withLinks) || escapeHtmlText(title);
+}
+
+/**
+ * Render a single line of inline markdown to HTML. remark-rehype runs
+ * without `allowDangerousHtml`, so raw HTML is dropped and text is
+ * entity-escaped by rehype-stringify: the result is safe to embed inline.
+ */
+function renderInlineMarkdownHtml(text: string): string {
+	const tree = unified().use(remarkParse).use(remarkGfm).parse(text);
+	const processor = unified().use(remarkRehype).use(rehypeStringify);
+	const html = processor.stringify(processor.runSync(tree)).trim();
+
+	// A single-line input yields exactly one paragraph; unwrap it so the
+	// markup is valid inline content.
+	return html
+		.replace(/^<p>/, "")
+		.replace(/<\/p>\n?$/, "")
+		.trim();
+}
+
+/**
+ * Rewrite every wikilink in a callout title into markdown link syntax so the
+ * inline markdown renderer produces a real anchor. Unresolvable wikilinks are
+ * left verbatim, matching body-text behaviour.
+ */
+function resolveTitleWikilinks(
+	title: string,
+	currentPage: ContentPage,
+	index: ContentIndex,
+	options: NormalizedPluginOptions,
+): string {
+	const matches = findWikilinkMatches(title);
+	if (matches.length === 0) {
+		return title;
+	}
+
+	let result = "";
+	let cursor = 0;
+	for (const match of matches) {
+		if (match.start > cursor) {
+			result += title.slice(cursor, match.start);
+		}
+
+		const parsed = parseWikiLink(match.inner, match.fullMatch);
+		const resolved = resolveWikiLink(parsed, {
+			currentPage,
+			index,
+			options: {
+				enableFuzzyMatching: options.enableFuzzyMatching,
+				enableCaseInsensitiveLookup: options.enableCaseInsensitiveLookup,
+			},
+		});
+
+		if (resolved.status === "ok" && resolved.href && resolved.label) {
+			// Escape bracket characters in the label and markdown-significant
+			// characters in the destination so both survive the inline parser.
+			const safeLabel = resolved.label.replace(/([[\\]])/g, "\\$1");
+			const safeHref = encodeMarkdownDestination(resolved.href);
+			result += `[${safeLabel}](${safeHref})`;
+		} else {
+			result += match.fullMatch;
+		}
+
+		cursor = match.end;
+	}
+	if (cursor < title.length) {
+		result += title.slice(cursor);
+	}
+
+	return result;
+}
+
+/**
+ * Percent-encode characters that would terminate a markdown `( destination )`
+ * construct, so page routes containing them still parse as one destination.
+ */
+function encodeMarkdownDestination(href: string): string {
+	return href.replace(/[ ()<>\\"[\]]/g, (char) => encodeURIComponent(char));
 }
 function stripFrontmatter(content: string): string {
 	if (!content.startsWith("---")) return content;
@@ -1280,9 +1922,13 @@ function extractBlockSection(
 		const line = lines[i] ?? "";
 		const lineNorm = line.trim().toLowerCase();
 
-		// Standalone block ID on its own line: references the block above it.
+		// Standalone block ID on its own line: references the block above it
+		// (blank lines between the block and the marker are tolerated).
 		if (lineNorm === `^${normalizedId}`) {
 			let start = i - 1;
+			while (start >= 0 && (lines[start] ?? "").trim() === "") {
+				start -= 1;
+			}
 			while (start >= 0 && (lines[start] ?? "").trim() !== "") {
 				start -= 1;
 			}

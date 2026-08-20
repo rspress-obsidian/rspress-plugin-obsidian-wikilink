@@ -5,6 +5,7 @@ node_modules
 out
 dist
 doc_build
+.obsidian-rspress-docs
 *.tgz
 
 # code coverage
@@ -37,6 +38,10 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Obsidian editor per-workspace state
 Obsidian Vault/.obsidian/workspace.json
 Obsidian Vault/.obsidian/workspace
+
+# local agent workspace — not part of the published library
+.agents/
+.claude/
 
 node_modules/
 Obsidian Vault/

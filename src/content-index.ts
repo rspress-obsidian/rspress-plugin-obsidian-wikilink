@@ -13,6 +13,8 @@ import type {
 	HeadingEntry,
 } from "./types.ts";
 import {
+	backlinkLabel,
+	normalizeFilePathKey,
 	normalizeFsPath,
 	normalizePathKey,
 	resolveRelativePathKey,
@@ -147,7 +149,7 @@ async function buildContentIndexFromFiles(
 			absolutePath: file.absolutePath,
 			relativePath: file.relativePath,
 			pathKey: normalizePathKey(file.relativePath),
-			baseName: path.basename(normalizePathKey(file.relativePath)),
+			baseName: path.basename(file.relativePath),
 			urlPath: `/${file.relativePath
 				.split("/")
 				.map((segment) => encodeURIComponent(segment))
@@ -155,6 +157,7 @@ async function buildContentIndexFromFiles(
 		}));
 	const byAbsolutePath = new Map<string, ContentPage>();
 	const byPathKey = new Map<string, ContentPage>();
+	const byFilePathKey = new Map<string, ContentPage>();
 	const byBaseName = new Map<string, ContentPage[]>();
 	const byTitle = new Map<string, ContentPage[]>();
 	const byAlias = new Map<string, ContentPage[]>();
@@ -162,14 +165,17 @@ async function buildContentIndexFromFiles(
 	const byAssetPath = new Map<string, ContentAsset>();
 	const byAssetBaseName = new Map<string, ContentAsset[]>();
 	const byPathKeyCI = new Map<string, ContentPage[]>();
+	const byFilePathKeyCI = new Map<string, ContentPage[]>();
 	const byBaseNameCI = new Map<string, ContentPage[]>();
+	const byAssetBaseNameCI = new Map<string, ContentAsset[]>();
 
 	for (const page of pages) {
 		byAbsolutePath.set(page.absolutePath, page);
 		byPathKey.set(page.pathKey, page);
+		byFilePathKey.set(page.filePathKey, page);
 
-		const pathKeyLower = page.pathKey.toLowerCase();
-		pushNamedPage(byPathKeyCI, pathKeyLower, page);
+		pushNamedPage(byPathKeyCI, page.pathKey.toLowerCase(), page);
+		pushNamedPage(byFilePathKeyCI, page.filePathKey.toLowerCase(), page);
 
 		if (page.baseName.length > 0) {
 			const existing = byBaseName.get(page.baseName) ?? [];
@@ -202,14 +208,15 @@ async function buildContentIndexFromFiles(
 		const existing = byAssetBaseName.get(asset.baseName) ?? [];
 		existing.push(asset);
 		byAssetBaseName.set(asset.baseName, existing);
+		pushNamedAsset(byAssetBaseNameCI, asset.baseName.toLowerCase(), asset);
 	}
 
 	const backlinks = new Map<string, BacklinkRef[]>();
 	for (const page of pages) {
 		for (const normalizedTarget of page.wikilinkTargets) {
 			const resolved = resolveBacklinkTarget(
-				byPathKey,
-				byPathKeyCI,
+				byFilePathKey,
+				byFilePathKeyCI,
 				byBaseName,
 				byBaseNameCI,
 				byTitle,
@@ -230,6 +237,7 @@ async function buildContentIndexFromFiles(
 		assets,
 		byAbsolutePath,
 		byPathKey,
+		byFilePathKey,
 		byBaseName,
 		byTitle,
 		byAlias,
@@ -237,14 +245,16 @@ async function buildContentIndexFromFiles(
 		byAssetPath,
 		byAssetBaseName,
 		byPathKeyCI,
+		byFilePathKeyCI,
 		byBaseNameCI,
+		byAssetBaseNameCI,
 		rawContentByPath,
 		backlinks,
 	};
 }
 function resolveBacklinkTarget(
-	byPathKey: Map<string, ContentPage>,
-	byPathKeyCI: Map<string, ContentPage[]>,
+	byFilePathKey: Map<string, ContentPage>,
+	byFilePathKeyCI: Map<string, ContentPage[]>,
 	byBaseName: Map<string, ContentPage[]>,
 	byBaseNameCI: Map<string, ContentPage[]>,
 	byTitle: Map<string, ContentPage[]>,
@@ -262,9 +272,19 @@ function resolveBacklinkTarget(
 		}
 	};
 
-	const exactPage = byPathKey.get(normalizedTarget);
+	const exactPage = byFilePathKey.get(normalizedTarget);
 	if (exactPage) {
 		addPage(exactPage);
+		return results;
+	}
+
+	const exactCaseInsensitivePage = byFilePathKeyCI.get(
+		normalizedTarget.toLowerCase(),
+	);
+	if (exactCaseInsensitivePage) {
+		for (const page of exactCaseInsensitivePage) {
+			addPage(page);
+		}
 		return results;
 	}
 
@@ -273,25 +293,13 @@ function resolveBacklinkTarget(
 		normalizedTarget,
 	);
 	if (relativePathKey !== undefined) {
-		const relativePage = byPathKey.get(relativePathKey);
-		if (relativePage) {
-			addPage(relativePage);
-			return results;
-		}
-
-		for (const candidate of byPathKeyCI.get(relativePathKey.toLowerCase()) ??
-			[]) {
-			addPage(candidate);
+		const relativePages = byFilePathKeyCI.get(relativePathKey.toLowerCase());
+		if (relativePages) {
+			for (const page of relativePages) {
+				addPage(page);
+			}
 		}
 		return results;
-	}
-
-	const ciCandidates = byPathKeyCI.get(normalizedTarget);
-	if (ciCandidates) {
-		for (const page of ciCandidates) {
-			addPage(page);
-			return results;
-		}
 	}
 
 	const baseName = path.basename(normalizedTarget) || normalizedTarget;
@@ -338,7 +346,7 @@ function addBacklinkEntry(
 	if (!already) {
 		existing.push({
 			routePath: sourcePage.routePath,
-			title: sourcePage.title ?? sourcePage.baseName,
+			title: backlinkLabel(sourcePage),
 		});
 		backlinks.set(targetRoutePath, existing);
 	}
@@ -435,7 +443,8 @@ async function buildContentPage(
 	const markdown = await fs.promises.readFile(file.absolutePath, "utf-8");
 	const routePath = deriveRoutePath(file.relativePath);
 	const pathKey = normalizePathKey(file.relativePath);
-	const baseName = path.basename(pathKey);
+	const filePathKey = normalizeFilePathKey(file.relativePath);
+	const baseName = path.basename(filePathKey);
 	const { title, aliases, tags, cssclasses, excerpt, publish } =
 		extractFrontmatterMetadata(markdown);
 
@@ -446,8 +455,10 @@ async function buildContentPage(
 	];
 	const headings = extractHeadings(lines, isContent);
 
-	// Pre-extract wikilink targets while we have the raw content in memory.
-	const wikilinkTargets = extractWikilinkTargets(markdown);
+	// Pre-extract referenced page targets while we have the raw content in
+	// memory. Restricted to content lines so references inside code fences,
+	// inline code, comments, and frontmatter do not create backlinks.
+	const wikilinkTargets = extractWikilinkTargets(lines, isContent);
 
 	const headingBySlug = new Map<string, HeadingEntry>();
 	const headingByText = new Map<string, HeadingEntry>();
@@ -457,17 +468,19 @@ async function buildContentPage(
 			headingBySlug.set(h.explicitId, h);
 			headingBySlug.set(normalizeLookupValue(h.explicitId), h);
 		}
-		headingByText.set(normalizeLookupValue(h.rawText), h);
+		const normalizedText = normalizeLookupValue(h.rawText);
+		if (!headingByText.has(normalizedText)) {
+			headingByText.set(normalizedText, h);
+		}
 	}
-
 	const blocks = extractBlocks(lines, isContent);
-
 	const page: ContentPage = {
 		absolutePath: file.absolutePath,
 		title,
 		relativePath: file.relativePath,
 		routePath,
 		pathKey,
+		filePathKey,
 		baseName,
 		tags: allTags,
 		aliases,
@@ -641,24 +654,74 @@ function extractBlocks(lines: string[], isContent: boolean[]): BlockEntry[] {
 }
 
 /**
- * Extract unique normalized wikilink targets from raw markdown content.
- * The targets are lowercased, backslash-normalized, and stripped of alias
- * (`|...`) and anchor (`#...`) fragments — matching exactly what the
- * backlinks resolver needs, so it can skip regex scanning entirely.
+ * Extract unique normalized wikilink targets from a page's content lines.
+ *
+ * Only lines flagged as content by {@link getContentLineFlags} are scanned, and
+ * inline code spans and `%% ... %%` comments are stripped first, so wikilinks
+ * that never render as links (code blocks, inline code, comments, frontmatter)
+ * do not create backlinks. The targets are lowercased, backslash-normalized,
+ * and stripped of alias (`|...`) and anchor (`#...`) fragments — matching
+ * exactly what the backlinks resolver needs, so it can skip regex scanning
+ * entirely.
  */
-function extractWikilinkTargets(markdown: string): string[] {
+function extractWikilinkTargets(
+	lines: string[],
+	isContent: boolean[],
+): string[] {
 	const seen = new Set<string>();
 	const targets: string[] = [];
 
-	for (const match of findWikilinkMatches(markdown)) {
+	const content = lines
+		.filter((_, index) => isContent[index])
+		.join("\n")
+		.replace(/(`+)[^`\n]*?\1/g, " ")
+		.replace(/%%[\s\S]*?%%/g, " ");
+
+	for (const match of findWikilinkMatches(content)) {
 		const parsed = parseWikiLink(match.inner, match.fullMatch);
 		const target = parsed.target;
-		if (!target) continue;
+		if (target) {
+			const normalized = target.replace(/\\/g, "/").toLowerCase();
+			if (!seen.has(normalized)) {
+				seen.add(normalized);
+				targets.push(normalized);
+			}
+		}
+	}
 
-		const normalized = target.replace(/\\/g, "/").toLowerCase();
-		if (seen.has(normalized)) continue;
-		seen.add(normalized);
-		targets.push(normalized);
+	const markdownLinkPattern =
+		/!?\[[^\]]*\]\(\s*(<[^>]+>|[^)\s]+)(?:\s+["'][^)]*)?\)/g;
+	for (const match of content.matchAll(markdownLinkPattern)) {
+		let target = match[1]?.trim() ?? "";
+		if (target.startsWith("<") && target.endsWith(">")) {
+			target = target.slice(1, -1);
+		}
+		if (
+			!target ||
+			/^[a-z][a-z0-9+.-]*:/i.test(target) ||
+			target.startsWith("//") ||
+			target.startsWith("#")
+		) {
+			continue;
+		}
+
+		const hashIndex = target.indexOf("#");
+		const pathPart = hashIndex >= 0 ? target.slice(0, hashIndex) : target;
+		if (!/\.(md|mdx)$/i.test(pathPart)) {
+			continue;
+		}
+
+		let normalized = pathPart.replace(/\.(md|mdx)$/i, "");
+		try {
+			normalized = decodeURIComponent(normalized);
+		} catch {
+			// Keep the raw path when a malformed escape appears in a link.
+		}
+		normalized = normalized.replace(/\\/g, "/").toLowerCase();
+		if (!seen.has(normalized)) {
+			seen.add(normalized);
+			targets.push(normalized);
+		}
 	}
 
 	return targets;
@@ -800,6 +863,19 @@ function pushNamedPage(
 	const existing = map.get(key) ?? [];
 	existing.push(page);
 	map.set(key, existing);
+}
+
+function pushNamedAsset(
+	map: Map<string, ContentAsset[]>,
+	rawValue: string,
+	asset: ContentAsset,
+): void {
+	if (!rawValue) {
+		return;
+	}
+	const existing = map.get(rawValue) ?? [];
+	existing.push(asset);
+	map.set(rawValue, existing);
 }
 
 export { normalizeFsPath } from "./utils.ts";

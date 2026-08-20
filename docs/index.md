@@ -1,10 +1,10 @@
 ---
 pageType: home
-description: Obsidian-style wikilinks for Rspress. Write your docs in Obsidian, publish with Rspress. Full support for wikilinks, transclusion, media embeds, callouts, tags, backlinks, and more.
+description: Static Obsidian-flavored Markdown for fast, searchable Rspress sites.
 hero:
-  name: rspress-plugin-obsidian-wikilink
-  text: Obsidian Wikilinks for Rspress
-  tagline: Write your docs in Obsidian, publish with Rspress. Bring wikilinks, transclusion, callouts, tags, backlinks, and full Obsidian syntax to your static site.
+  name: Obsidian → Rspress
+  text: Static Obsidian docs, shipped fast
+  tagline: Write in Obsidian. Publish a fast, searchable Rspress site with wikilinks, embeds, callouts, tags, and backlinks intact.
   actions:
     - theme: brand
       text: Get Started
@@ -31,8 +31,8 @@ features:
   - title: Tags & Backlinks
     details: 'Convert #tags into links, auto-generate /tags/{name} index pages, and append backlinks panels to every page.'
     icon: 🏷️
-  - title: Full Obsidian Syntax
-    details: 'Comments (%%), highlights (==text==), footnotes [^1], frontmatter titles/aliases/tags/cssclasses, and publish: false drafts.'
+  - title: Static Obsidian Markdown
+    details: 'Comments (%%), highlights (==text==), footnotes [^1], selected frontmatter, and publish: false drafts.'
     icon: ✨
 ---
 

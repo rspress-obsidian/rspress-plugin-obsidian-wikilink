@@ -36,7 +36,8 @@ export default defineConfig({
 | `onBrokenLink` | `"error" \| "warn"` | `"error"` | How to handle missing link targets |
 | `onAmbiguousLink` | `"error" \| "warn"` | `"error"` | How to handle ambiguous links |
 | `enableFuzzyMatching` | `boolean` | `false` | Enable shortest-suffix path fallback |
-| `enableCaseInsensitiveLookup` | `boolean` | `false` | Enable case-insensitive path resolution |
+| `enableCaseInsensitiveLookup` | `boolean` | `true` | Case-insensitive path resolution (matches Obsidian; set `false` for strict matching) |
+| `enableMarkdownLinks` | `boolean` | `true` | Resolve `[label](Page.md)` markdown links and `![alt](note.md)` embeds against the vault |
 | `enableTagLinking` | `boolean` | `false` | Convert `#tag` to `/tags/tag` links |
 | `enableTagPages` | `boolean` | `false` | Generate `/tags/{name}` index pages |
 | `enableCallouts` | `boolean` | `false` | Transform `> [!note]` callouts |

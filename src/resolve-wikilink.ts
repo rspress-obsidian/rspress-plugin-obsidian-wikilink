@@ -13,12 +13,12 @@ import type {
 	WikiSubpath,
 } from "./types.ts";
 import {
+	encodeRoutePath,
 	formatAvailableBlocks,
 	formatAvailableHeadings,
-	normalizePathKey,
+	normalizeFilePathKey,
 	resolveRelativePathKey,
 } from "./utils.ts";
-
 /**
  * Resolve a parsed wikilink against the content index, returning a
  * {@link ResolvedWikiLink} with either an `href` + `label` on success or
@@ -28,7 +28,7 @@ import {
  * 1. Exact path match
  * 2. Unique basename match
  * 3. Unique frontmatter title or alias match
- * 4. Case-insensitive path fallback (opt-in via
+ * 4. Case-insensitive path fallback (on by default; disable via
  *    {@link NormalizedPluginOptions.enableCaseInsensitiveLookup})
  * 5. Shortest-suffix fuzzy match (opt-in via
  *    {@link NormalizedPluginOptions.enableFuzzyMatching})
@@ -57,7 +57,7 @@ export function resolveWikiLink(
 		parsed.target,
 	);
 	if (relativePathKey !== undefined) {
-		const relativePage = context.index.byPathKey.get(relativePathKey);
+		const relativePage = context.index.byFilePathKey.get(relativePathKey);
 		if (relativePage) {
 			return resolveAgainstPage(relativePage, parsed);
 		}
@@ -73,8 +73,8 @@ export function resolveWikiLink(
 		};
 	}
 
-	const exactPathKey = normalizePathKey(parsed.target);
-	const exactPage = context.index.byPathKey.get(exactPathKey);
+	const exactPathKey = normalizeFilePathKey(parsed.target);
+	const exactPage = context.index.byFilePathKey.get(exactPathKey);
 
 	if (exactPage) {
 		return resolveAgainstPage(exactPage, parsed);
@@ -129,11 +129,17 @@ export function resolveWikiLink(
 		const caseInsensitiveAssets = context.index.assets.filter(
 			(asset) => asset.pathKey.toLowerCase() === normalizedAssetTarget,
 		);
-		if (caseInsensitiveAssets.length === 1) {
-			const asset = caseInsensitiveAssets[0];
+		const caseInsensitiveAssetBaseNameCandidates =
+			context.index.byAssetBaseNameCI.get(assetBaseName.toLowerCase()) ?? [];
+		const allCaseInsensitiveAssets =
+			caseInsensitiveAssets.length > 0
+				? caseInsensitiveAssets
+				: caseInsensitiveAssetBaseNameCandidates;
+		if (allCaseInsensitiveAssets.length === 1) {
+			const asset = allCaseInsensitiveAssets[0];
 			if (asset) return resolveAgainstAsset(asset, parsed);
 		}
-		if (caseInsensitiveAssets.length > 1) {
+		if (allCaseInsensitiveAssets.length > 1) {
 			return {
 				status: "ambiguous-page",
 				message: `Wikilink target "${parsed.target}" matches multiple attachments; use a case-sensitive path.`,
@@ -234,7 +240,7 @@ function resolveVaultSearch(
 
 	return {
 		status: "ok",
-		href: `${match.page.routePath}#${match.fragment}`,
+		href: `${encodeRoutePath(match.page.routePath)}#${match.fragment}`,
 		label:
 			parsed.alias ??
 			(parsed.search === "block" ? match.label.slice(1) : match.label),
@@ -291,7 +297,7 @@ function resolveAgainstPage(
 	if (!parsed.subpath) {
 		return {
 			status: "ok",
-			href: page.routePath,
+			href: encodeRoutePath(page.routePath),
 			label,
 			targetPage: page,
 		};
@@ -319,7 +325,7 @@ function resolveAgainstPage(
 
 	return {
 		status: "ok",
-		href: `${page.routePath}#${resolvedSubpath}`,
+		href: `${encodeRoutePath(page.routePath)}#${resolvedSubpath}`,
 		label,
 		description,
 		targetPage: page,
@@ -500,10 +506,8 @@ function resolveFuzzyPage(
 	if (!normalizedTarget) {
 		return undefined;
 	}
-
-	// Find all pages matching by case-insensitive path or path suffix
 	const suffixMatches = context.index.pages.filter((page) => {
-		const normalizedPagePath = normalizeFuzzyLookup(page.pathKey);
+		const normalizedPagePath = normalizeFuzzyLookup(page.filePathKey);
 		return (
 			normalizedPagePath === normalizedTarget ||
 			normalizedPagePath.endsWith(`/${normalizedTarget}`)
@@ -515,7 +519,7 @@ function resolveFuzzyPage(
 	}
 
 	const sortedMatches = [...suffixMatches].sort(
-		(left, right) => left.pathKey.length - right.pathKey.length,
+		(left, right) => left.filePathKey.length - right.filePathKey.length,
 	);
 	const bestMatch = sortedMatches[0];
 	const secondMatch = sortedMatches[1];
@@ -524,7 +528,10 @@ function resolveFuzzyPage(
 		return undefined;
 	}
 
-	if (secondMatch && secondMatch.pathKey.length === bestMatch.pathKey.length) {
+	if (
+		secondMatch &&
+		secondMatch.filePathKey.length === bestMatch.filePathKey.length
+	) {
 		return {
 			kind: "result",
 			result: {
@@ -547,12 +554,12 @@ function resolveCaseInsensitivePage(
 	| { kind: "resolved"; page: ContentPage }
 	| { kind: "result"; result: ResolvedWikiLink }
 	| undefined {
-	const normalizedTarget = normalizePathKey(target).toLowerCase();
+	const normalizedTarget = normalizeFilePathKey(target).toLowerCase();
 	if (!normalizedTarget) {
 		return undefined;
 	}
 
-	const pathCandidates = context.index.byPathKeyCI.get(normalizedTarget);
+	const pathCandidates = context.index.byFilePathKeyCI.get(normalizedTarget);
 	if (pathCandidates) {
 		return resolveCandidateSet(pathCandidates, target, "a more specific path");
 	}
@@ -565,9 +572,8 @@ function resolveCaseInsensitivePage(
 		"a path-qualified link",
 	);
 }
-
 function normalizeFuzzyLookup(input: string): string {
-	return normalizePathKey(input).toLowerCase();
+	return normalizeFilePathKey(input).toLowerCase();
 }
 
 function describeSubpath(subpath: WikiSubpath): string {

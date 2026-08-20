@@ -52,7 +52,9 @@ async function minifyStyles(): Promise<void> {
 	const before = Buffer.byteLength(source);
 	const after = Buffer.byteLength(result.code);
 	const saved = ((1 - after / before) * 100).toFixed(1);
-	console.log(`  minified src/styles.css → dist/styles.css (${before}B → ${after}B, -${saved}%)`);
+	console.log(
+		`  minified src/styles.css → dist/styles.css (${before}B → ${after}B, -${saved}%)`,
+	);
 }
 
 async function main(): Promise<void> {

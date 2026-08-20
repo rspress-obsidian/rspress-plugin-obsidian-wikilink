@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- Shared wikilink tokenization for normal links and embeds, including escaped
+  alias delimiters.
+- Compatibility fixtures for spaced page paths and duplicate heading slugs.
+
+### Fixed
+
+- Page-link URLs now percent-encode route segments such as spaces without
+  encoding heading fragments.
+- Callout icons now use visible CSP-safe glyphs instead of data-URI masks.
+
+- Escape-aware wikilink tokenization now supports filenames containing escaped
+  square brackets.
+- Page resolution keeps exact vault-relative paths separate from Rspress route
+  aliases, including `foo.md` versus `foo/index.md`.
+- Case-insensitive attachment basenames and Markdown page links now participate
+  in backlink indexing.
+
 ## 0.1.1 - 2026-05-06
 
 ### Added

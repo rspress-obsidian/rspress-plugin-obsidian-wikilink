@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
+import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkStringify from "remark-stringify";
 import { unified } from "unified";
@@ -65,11 +66,21 @@ const compatibilityFixtureRoot = path.resolve(
 	"tests/fixtures/compatibility",
 );
 
+const wikilinkCompatibilityFixtureRoot = path.resolve(
+	process.cwd(),
+	"tests/fixtures/wikilink-compat",
+);
+const pathCollisionFixtureRoot = path.resolve(
+	process.cwd(),
+	"tests/fixtures/path-collisions",
+);
+
 const DEFAULT_OPTIONS: NormalizedPluginOptions = {
 	onBrokenLink: "error",
 	onAmbiguousLink: "error",
 	enableFuzzyMatching: false,
 	enableCaseInsensitiveLookup: false,
+	enableMarkdownLinks: true,
 	enableTagLinking: false,
 	enableCallouts: false,
 	enableBacklinks: false,
@@ -177,6 +188,22 @@ describe("parseWikiLink", () => {
 		expect(matches[0]?.fullMatch).toBe("[[Page]]");
 		expect(matches[1]?.fullMatch).toBe("![[Embed]]");
 	});
+	test("finds wikilinks with escaped square brackets", () => {
+		const matches = findWikilinkMatches(
+			"See [[Note with \\[brackets\\]]] and ![[Image \\] copy.png]]",
+		);
+
+		expect(matches.map((match) => match.fullMatch)).toEqual([
+			"[[Note with \\[brackets\\]]]",
+			"![[Image \\] copy.png]]",
+		]);
+		expect(
+			matches.map((match) => parseWikiLink(match.inner, match.fullMatch)),
+		).toMatchObject([
+			{ target: "Note with [brackets]" },
+			{ target: "Image ] copy.png", isEmbed: true },
+		]);
+	});
 });
 
 describe("buildContentIndex", () => {
@@ -257,6 +284,31 @@ describe("buildContentIndex", () => {
 		expect(index.assets.map((asset) => asset.pathKey)).toContain("image.png");
 		expect(index.byTag.get("asset-test")?.[0]?.pathKey).toBe("");
 		expect(index.byAssetPath.get("image.png")?.urlPath).toBe("/image.png");
+		expect(index.byAssetBaseNameCI.get("image.png")?.[0]?.pathKey).toBe(
+			"image.png",
+		);
+	});
+	test("indexes spaced paths and duplicate heading slugs", async () => {
+		const index = await buildContentIndex(wikilinkCompatibilityFixtureRoot);
+		const page = index.byPathKey.get("Folder/Space Note");
+
+		expect(page?.routePath).toBe("/Folder/Space Note");
+		expect(page?.headings.map((heading) => heading.slug)).toEqual([
+			"space-note",
+			"duplicate",
+			"duplicate-1",
+		]);
+	});
+	test("keeps folder index pages distinct from flat pages", async () => {
+		const index = await buildContentIndex(pathCollisionFixtureRoot);
+
+		expect(index.byFilePathKey.get("foo")?.relativePath).toBe("foo.md");
+		expect(index.byFilePathKey.get("foo/index")?.relativePath).toBe(
+			"foo/index.md",
+		);
+		expect(index.byFilePathKeyCI.get("foo/index")?.[0]?.relativePath).toBe(
+			"foo/index.md",
+		);
 	});
 });
 
@@ -277,6 +329,57 @@ describe("resolveWikiLink", () => {
 			status: "ok",
 			href: "/guide/getting-started",
 			label: "getting started",
+		});
+	});
+	test("resolves folder index paths independently from flat pages", async () => {
+		const index = await buildContentIndex(pathCollisionFixtureRoot);
+		const currentPage = index.byFilePathKey.get("index")!;
+
+		const flat = resolveWikiLink(parseWikiLink("foo", "[[foo]]"), {
+			currentPage,
+			index,
+		});
+		const folder = resolveWikiLink(
+			parseWikiLink("foo/index", "[[foo/index]]"),
+			{ currentPage, index },
+		);
+
+		expect(flat.targetPage?.relativePath).toBe("foo.md");
+		expect(folder.targetPage?.relativePath).toBe("foo/index.md");
+	});
+
+	test("encodes spaced page routes while preserving heading fragments", async () => {
+		const index = await buildContentIndex(wikilinkCompatibilityFixtureRoot);
+		const currentPage = index.byPathKey.get("")!;
+
+		const result = resolveWikiLink(
+			parseWikiLink(
+				"Folder/Space Note#duplicate-1",
+				"[[Folder/Space Note#duplicate-1]]",
+			),
+			{ currentPage, index },
+		);
+
+		expect(result).toMatchObject({
+			status: "ok",
+			href: "/Folder/Space%20Note#duplicate-1",
+		});
+	});
+	test("resolves raw duplicate heading text to the first heading", async () => {
+		const index = await buildContentIndex(wikilinkCompatibilityFixtureRoot);
+		const currentPage = index.byFilePathKey.get("index")!;
+
+		const result = resolveWikiLink(
+			parseWikiLink(
+				"Folder/Space Note#Duplicate",
+				"[[Folder/Space Note#Duplicate]]",
+			),
+			{ currentPage, index },
+		);
+
+		expect(result).toMatchObject({
+			status: "ok",
+			href: "/Folder/Space%20Note#duplicate",
 		});
 	});
 
@@ -318,7 +421,7 @@ describe("resolveWikiLink", () => {
 			href: "/shared/Concept#explicit-anchor",
 		});
 		expect(index.backlinks.get("/shared/Concept")).toEqual([
-			{ routePath: "/notes/current", title: "current" },
+			{ routePath: "/notes/current", title: "Current Note" },
 		]);
 	});
 
@@ -960,7 +1063,7 @@ describe("backlinks caching", () => {
 		const index = await buildContentIndex(aliasFixtureRoot);
 		const backlinks = index.backlinks.get("/guide/getting-started");
 
-		expect(backlinks).toEqual([{ routePath: "/", title: "" }]);
+		expect(backlinks).toEqual([{ routePath: "/", title: "Alias Home" }]);
 	});
 });
 
@@ -1690,6 +1793,17 @@ describe("media embeds", () => {
 
 		expect(String(file)).toContain("[image.png](/image.png)");
 	});
+	test("resolves attachment basenames case-insensitively", async () => {
+		const processor = makeProcessor(assetsFixtureRoot, {
+			enableCaseInsensitiveLookup: true,
+		});
+		const file = await processor.process({
+			value: "[[IMAGE.PNG]]",
+			path: path.resolve(assetsFixtureRoot, "index.md"),
+		});
+
+		expect(String(file)).toContain("[image.png](/image.png)");
+	});
 
 	test("supports PDF page and height fragments", async () => {
 		const processor = makeProcessor(assetsFixtureRoot, {
@@ -1736,6 +1850,19 @@ describe("media embeds", () => {
 		expect(output).not.toContain('src="../');
 		expect(output).toContain('src="/secret.png"');
 	});
+	test("uses the shared parser for escaped image aliases", async () => {
+		const processor = makeProcessor(assetsFixtureRoot, {
+			enableMediaEmbeds: true,
+		});
+		const file = await processor.process({
+			value: "![[image.png|A \\| B]]",
+			path: path.resolve(assetsFixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain('alt="A | B"');
+		expect(output).not.toContain("A \\| B");
+	});
 });
 
 describe("backlinks HTML", () => {
@@ -1765,7 +1892,7 @@ describe("backlinks HTML", () => {
 		const backlinks = await buildBacklinksIndex(index);
 
 		expect(backlinks.get("/guide/getting-started")).toEqual([
-			{ routePath: "/", title: "" },
+			{ routePath: "/", title: "Home" },
 		]);
 	});
 });
@@ -1930,6 +2057,54 @@ describe("pluginObsidianWikiLink API", () => {
 
 		expect("addPages" in pluginDefault).toBe(false);
 	});
+
+	test("defaults to case-insensitive lookup, matching Obsidian", async () => {
+		const { pluginObsidianWikiLink } = await import("../src/index");
+		const plugin = pluginObsidianWikiLink();
+		const tuple = plugin.markdown?.remarkPlugins?.[0] as [
+			unknown,
+			{ options: NormalizedPluginOptions },
+		];
+
+		expect(tuple[1].options.enableCaseInsensitiveLookup).toBe(true);
+	});
+
+	test("allows opting out of case-insensitive lookup", async () => {
+		const { pluginObsidianWikiLink } = await import("../src/index");
+		const plugin = pluginObsidianWikiLink({
+			enableCaseInsensitiveLookup: false,
+		});
+		const tuple = plugin.markdown?.remarkPlugins?.[0] as [
+			unknown,
+			{ options: NormalizedPluginOptions },
+		];
+
+		expect(tuple[1].options.enableCaseInsensitiveLookup).toBe(false);
+	});
+
+	test("defaults to markdown link resolution, matching Obsidian", async () => {
+		const { pluginObsidianWikiLink } = await import("../src/index");
+		const plugin = pluginObsidianWikiLink();
+		const tuple = plugin.markdown?.remarkPlugins?.[0] as [
+			unknown,
+			{ options: NormalizedPluginOptions },
+		];
+
+		expect(tuple[1].options.enableMarkdownLinks).toBe(true);
+	});
+
+	test("allows opting out of markdown link resolution", async () => {
+		const { pluginObsidianWikiLink } = await import("../src/index");
+		const plugin = pluginObsidianWikiLink({
+			enableMarkdownLinks: false,
+		});
+		const tuple = plugin.markdown?.remarkPlugins?.[0] as [
+			unknown,
+			{ options: NormalizedPluginOptions },
+		];
+
+		expect(tuple[1].options.enableMarkdownLinks).toBe(false);
+	});
 });
 
 describe("duplicate footnote labels", () => {
@@ -2061,13 +2236,6 @@ describe("complex yaml frontmatter", () => {
 });
 
 describe("wikilink escape handling", () => {
-	test("does not split on an escaped pipe in the target", () => {
-		const parsed = parseWikiLink("Page\\|Name", "[[Page\\|Name]]");
-
-		expect(parsed.target).toBe("Page|Name");
-		expect(parsed.alias).toBeUndefined();
-	});
-
 	test("does not split on an escaped hash in the target", () => {
 		const parsed = parseWikiLink("Page\\#Name", "[[Page\\#Name]]");
 
@@ -2128,5 +2296,658 @@ describe("media URL encoding", () => {
 		});
 
 		expect(String(file)).toContain('src="/my%20image.png"');
+	});
+});
+
+describe("backlink exclusions", () => {
+	const backlinksCodeRoot = path.resolve(
+		process.cwd(),
+		"tests/fixtures/backlinks-code",
+	);
+
+	test("indexes backlinks from real wikilinks and Markdown links", async () => {
+		const index = await buildContentIndex(backlinksCodeRoot);
+
+		// Code blocks, inline code, and comments must not create backlinks;
+		// both real link syntaxes should deduplicate to one source page.
+		expect(index.backlinks.get("/target")).toEqual([
+			{ routePath: "/codes", title: "Code Mentions" },
+		]);
+	});
+
+	test("renders wikilinks inside code blocks as plain text", async () => {
+		const processor = makeProcessor(backlinksCodeRoot);
+		const file = await processor.process({
+			value: "```md\n[[target]]\n```\n\nInline `[[target]]` too.",
+			path: path.resolve(backlinksCodeRoot, "codes.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain("[[target]]");
+		expect(output).not.toContain("](/target)");
+	});
+});
+
+describe("callout title markdown", () => {
+	test("renders inline markdown in callout titles", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableCallouts: true,
+		});
+
+		const file = await processor.process({
+			value: "> [!success] A **bold** and *italic* title with `code`\n> Body",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain(
+			'<div class="callout-title">A <strong>bold</strong> and <em>italic</em> title with <code>code</code></div>',
+		);
+	});
+
+	test("resolves wikilinks inside callout titles", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableCallouts: true,
+		});
+
+		const file = await processor.process({
+			value:
+				"> [!example] See [[guide/getting-started|Getting Started]] now\n> Body",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain(
+			'<div class="callout-title">See <a href="/guide/getting-started">Getting Started</a> now</div>',
+		);
+	});
+
+	test("drops raw HTML in callout titles instead of rendering it", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableCallouts: true,
+		});
+
+		const file = await processor.process({
+			value: "> [!bug] Title with <script>alert(1)</script>\n> Body",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).not.toContain("<script>");
+		expect(output).toContain("alert(1)");
+	});
+
+	test("leaves unresolvable wikilinks in callout titles verbatim", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableCallouts: true,
+		});
+
+		const file = await processor.process({
+			value: "> [!question] See [[missing-page]] here\n> Body",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		expect(String(file)).toContain(
+			'<div class="callout-title">See [[missing-page]] here</div>',
+		);
+	});
+});
+
+describe("image alt text", () => {
+	test("uses a non-numeric pipe alias as image alt text", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableMediaEmbeds: true,
+		});
+
+		const file = await processor.process({
+			value: "![[image.png|Screenshot of the UI]]",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		expect(String(file)).toContain(
+			'<img src="/image.png" alt="Screenshot of the UI" loading="lazy" />',
+		);
+	});
+
+	test("still treats a numeric pipe as a size, not alt text", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableMediaEmbeds: true,
+		});
+
+		const file = await processor.process({
+			value: "![[image.png|300]]",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		expect(String(file)).toContain(
+			'<img src="/image.png" alt="image.png" width="300" loading="lazy" />',
+		);
+	});
+});
+
+describe("wikilink and tag interaction", () => {
+	test("does not rewrite current-page anchors inside wikilinks as tags", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableTagLinking: true,
+		});
+
+		const file = await processor.process({
+			value: "Jump to [[#Overview]] now.",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		// The resolver appends a tooltip title (heading preview); only assert
+		// the link itself here.
+		expect(output).toContain("[Overview](#overview");
+		expect(output).not.toContain("/tags/");
+	});
+
+	test("does not rewrite heading anchors inside wikilinks as tags", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableTagLinking: true,
+		});
+
+		const file = await processor.process({
+			value: "See [[guide/getting-started#Install]] for details.",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain("[Install](/guide/getting-started#install");
+		expect(output).not.toContain("/tags/");
+		expect(output).not.toContain("[[");
+	});
+
+	test("does not highlight ==text== inside wikilink aliases", async () => {
+		const processor = makeProcessor(fixtureRoot);
+
+		const file = await processor.process({
+			value: "See [[guide/getting-started#Install|==Important==]] here.",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain("[==Important==](");
+		expect(output).not.toContain("<mark>");
+	});
+});
+
+describe("markdown link resolution", () => {
+	test("resolves vault-relative .md links by path", async () => {
+		const processor = makeProcessor(fixtureRoot);
+
+		const file = await processor.process({
+			value: "See [the guide](guide/getting-started.md) for details.",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		expect(String(file)).toBe(
+			"See [the guide](/guide/getting-started) for details.\n",
+		);
+	});
+
+	test("resolves .md links by basename across folders", async () => {
+		const processor = makeProcessor(fixtureRoot);
+
+		const file = await processor.process({
+			value: "See [the guide](getting-started.md).",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		expect(String(file)).toBe("See [the guide](/guide/getting-started).\n");
+	});
+
+	test("resolves heading anchors in .md links", async () => {
+		const processor = makeProcessor(fixtureRoot);
+
+		const file = await processor.process({
+			value: "See [install steps](guide/getting-started.md#Install).",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain("[install steps](/guide/getting-started#install");
+		expect(output).not.toContain(".md");
+	});
+
+	test("resolves root-absolute .md links", async () => {
+		const processor = makeProcessor(fixtureRoot);
+
+		const file = await processor.process({
+			value: "See [the guide](/guide/getting-started.md).",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		expect(String(file)).toBe("See [the guide](/guide/getting-started).\n");
+	});
+
+	test("resolves .md links case-insensitively when enabled", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableCaseInsensitiveLookup: true,
+		});
+
+		const file = await processor.process({
+			value: "See [the guide](GUIDE/Getting-Started.md).",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		expect(String(file)).toBe("See [the guide](/guide/getting-started).\n");
+	});
+
+	test("decodes percent-encoded .md destinations", async () => {
+		const processor = makeProcessor(fixtureRoot);
+
+		const file = await processor.process({
+			value: "See [the guide](guide/getting-started.md).",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		expect(String(file)).toBe("See [the guide](/guide/getting-started).\n");
+	});
+
+	test("leaves external, hash-only, and extensionless links untouched", async () => {
+		const processor = makeProcessor(fixtureRoot);
+
+		const file = await processor.process({
+			value:
+				"[docs](https://example.com/a.md), [section](#anchor), [route](/guide/getting-started), [mail](mailto:x@y.md).",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain("(https://example.com/a.md)");
+		expect(output).toContain("(#anchor)");
+		expect(output).toContain("(/guide/getting-started)");
+		expect(output).toContain("(mailto:x@y.md)");
+	});
+
+	test("leaves unresolvable .md links untouched in warn mode", async () => {
+		const processor = makeProcessor(fixtureRoot, { onBrokenLink: "warn" });
+
+		const file = await processor.process({
+			value: "See [missing](no-such-page.md).",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		expect(String(file)).toBe("See [missing](no-such-page.md).\n");
+		expect(
+			file.messages.some((m) => String(m).includes("no-such-page.md")),
+		).toBe(true);
+	});
+
+	test("fails the build for unresolvable .md links in error mode", async () => {
+		const processor = makeProcessor(fixtureRoot);
+
+		await expect(
+			processor.process({
+				value: "See [missing](no-such-page.md).",
+				path: path.resolve(fixtureRoot, "index.md"),
+			}),
+		).rejects.toThrow();
+	});
+
+	test("resolves relative .md links from the current folder", async () => {
+		const processor = makeProcessor(fixtureRoot);
+
+		const file = await processor.process({
+			value: "See [advanced](./advanced.md).",
+			path: path.resolve(fixtureRoot, "guide/getting-started.md"),
+		});
+
+		expect(String(file)).toBe("See [advanced](/guide/advanced).\n");
+	});
+
+	test("can be disabled", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableMarkdownLinks: false,
+		});
+
+		const file = await processor.process({
+			value: "See [the guide](guide/getting-started.md).",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		expect(String(file)).toBe("See [the guide](guide/getting-started.md).\n");
+	});
+});
+
+describe("markdown embeds", () => {
+	test("transcludes ![alt](Page.md) embeds", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableTransclusion: true,
+		});
+
+		const file = await processor.process({
+			value: "![intro](guide/getting-started.md)",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain('class="obsidian-transclusion"');
+		expect(output).toContain("Getting Started");
+	});
+
+	test("transcludes a section from ![alt](Page.md#Heading) embeds", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableTransclusion: true,
+		});
+
+		const file = await processor.process({
+			value: "![install](guide/getting-started.md#Install)",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain('class="obsidian-transclusion"');
+		expect(output).toContain("Install");
+	});
+
+	test("renders an embed link when transclusion is disabled", async () => {
+		const processor = makeProcessor(fixtureRoot);
+
+		const file = await processor.process({
+			value: "![intro](guide/getting-started.md)",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain('class="obsidian-embed"');
+		expect(output).toContain('href="/guide/getting-started"');
+		expect(output).toContain("intro");
+	});
+});
+
+describe("missing section embeds", () => {
+	test("reports broken anchors on embeds through onBrokenLink", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableTransclusion: true,
+			onBrokenLink: "warn",
+		});
+
+		const file = await processor.process({
+			value: "![[guide/getting-started#Missing]]",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		// The raw embed is left in place (remark-stringify escapes the
+		// brackets) rather than falling back to the full page content.
+		expect(output).toContain("guide/getting-started#Missing");
+		expect(output).not.toContain('class="obsidian-transclusion"');
+		expect(output).not.toContain("Install steps");
+		expect(file.messages.some((m) => String(m).includes("broken-anchor"))).toBe(
+			true,
+		);
+	});
+});
+
+describe("callout title highlights", () => {
+	test("renders ==highlights== inside callout titles", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableCallouts: true,
+		});
+
+		const file = await processor.process({
+			value: "> [!warning] A ==critical== warning\n> Body",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain(
+			'<div class="callout-title">A <mark>critical</mark> warning</div>',
+		);
+	});
+
+	test("renders highlights combined with markdown and wikilinks", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableCallouts: true,
+		});
+
+		const file = await processor.process({
+			value:
+				"> [!example] **See** [[guide/getting-started|the guide]] ==now==\n> Body",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain("<strong>See</strong>");
+		expect(output).toContain('<a href="/guide/getting-started">the guide</a>');
+		expect(output).toContain("<mark>now</mark>");
+	});
+});
+
+describe("markdown link config hook", () => {
+	type ConfigFn = (config: Record<string, unknown>) => Record<string, unknown>;
+
+	test("defaults markdown.link.checkDeadLinks to false when markdown links are on", async () => {
+		const { pluginObsidianWikiLink } = await import("../src/index");
+		const plugin = pluginObsidianWikiLink();
+		const configFn = plugin.config as unknown as ConfigFn;
+
+		const config = configFn({ root: "docs" });
+
+		expect(
+			(config.markdown as { link?: { checkDeadLinks?: boolean } })?.link
+				?.checkDeadLinks,
+		).toBe(false);
+	});
+
+	test("does not override an explicit checkDeadLinks setting", async () => {
+		const { pluginObsidianWikiLink } = await import("../src/index");
+		const plugin = pluginObsidianWikiLink();
+		const configFn = plugin.config as unknown as ConfigFn;
+
+		const config = configFn({
+			root: "docs",
+			markdown: { link: { checkDeadLinks: true } },
+		});
+
+		expect(
+			(config.markdown as { link?: { checkDeadLinks?: boolean } })?.link
+				?.checkDeadLinks,
+		).toBe(true);
+	});
+
+	test("leaves the dead-link gate alone when markdown links are disabled", async () => {
+		const { pluginObsidianWikiLink } = await import("../src/index");
+		const plugin = pluginObsidianWikiLink({ enableMarkdownLinks: false });
+		const configFn = plugin.config as unknown as ConfigFn;
+
+		const config = configFn({ root: "docs" });
+
+		expect(config.markdown).toBeUndefined();
+	});
+});
+
+describe("backlink labels", () => {
+	const backlinkLabelsRoot = path.resolve(
+		process.cwd(),
+		"tests/fixtures/backlink-labels",
+	);
+
+	test("prefers frontmatter title, then first heading, then humanized basename", async () => {
+		const index = await buildContentIndex(backlinkLabelsRoot);
+
+		expect(index.backlinks.get("/target")).toEqual([
+			{ routePath: "/linker-heading", title: "My Heading" },
+			{ routePath: "/linker-plain", title: "linker plain" },
+			{ routePath: "/linker-title", title: "Custom Title" },
+		]);
+	});
+});
+
+describe("rspress callout restoration", () => {
+	// Faithful replica of the GitHub-style alert branch of Rspress's internal
+	// remarkContainerSyntax: rewrites `> [!type]` blockquotes into
+	// $$$callout$$$ containerDirective nodes, leaking the fold suffix into
+	// content and dropping the first paragraph of multi-paragraph alerts.
+	interface TestNode {
+		type?: string;
+		name?: string;
+		attributes?: Record<string, string | undefined>;
+		value?: string;
+		children?: TestNode[];
+	}
+
+	const RSPRESS_TYPES = new Set([
+		"tip",
+		"note",
+		"warning",
+		"caution",
+		"danger",
+		"info",
+		"details",
+	]);
+	const REGEX_GH_BEGIN = /^\s*\s*\[!(\w+)\]\s*(.*)/;
+
+	function hijackAlertsLikeRspress(parent: { children: TestNode[] }): void {
+		for (let i = 0; i < parent.children.length; i++) {
+			const node = parent.children[i];
+			if (node?.children) hijackAlertsLikeRspress({ children: node.children });
+			const firstChild = node?.children?.[0];
+			const firstText = firstChild?.children?.[0];
+			if (
+				node?.type === "blockquote" &&
+				firstChild?.type === "paragraph" &&
+				firstText &&
+				"value" in firstText
+			) {
+				const match = String(firstText.value).match(REGEX_GH_BEGIN);
+				if (!match) continue;
+				const type = String(match[1]).toLowerCase();
+				if (!RSPRESS_TYPES.has(type)) continue;
+				const kids = node.children ?? [];
+				if (kids.length === 1) {
+					firstText.value = match[2] ?? "";
+				}
+				const container: TestNode = {
+					type: "containerDirective",
+					name: "$$$callout$$$",
+					attributes: { type, title: type.toUpperCase() },
+					children: kids.length === 1 ? kids.slice(0) : kids.slice(1),
+				};
+				parent.children.splice(i, 1, container);
+			}
+		}
+	}
+
+	type WikilinkTransformer = (tree: unknown, file: unknown) => Promise<void>;
+
+	function makeTransformer(
+		options: Partial<NormalizedPluginOptions>,
+	): WikilinkTransformer {
+		const factory = remarkWikilink as unknown as (
+			pluginOptions: unknown,
+		) => WikilinkTransformer;
+		return factory({
+			getDocsRoot: () => fixtureRoot,
+			options: { ...DEFAULT_OPTIONS, ...options },
+		});
+	}
+
+	function toTestTree(tree: unknown): { children: TestNode[] } {
+		return tree as { children: TestNode[] };
+	}
+
+	async function processHijacked(
+		source: string,
+		options: Partial<NormalizedPluginOptions> = {},
+	): Promise<string> {
+		const tree = unified().use(remarkParse).use(remarkGfm).parse(source);
+		hijackAlertsLikeRspress(toTestTree(tree));
+		const { VFile } = await import("vfile");
+		const file = new VFile({
+			value: source,
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+		await makeTransformer({ enableCallouts: true, ...options })(tree, file);
+		return unified().use(remarkStringify).stringify(tree);
+	}
+
+	test("restores foldable hijacked callouts with title and fold state", async () => {
+		const output = await processHijacked(
+			"> [!note]- Collapsed by Default\n> Hidden until expanded.\n",
+		);
+
+		expect(output).toContain("<details");
+		expect(output).toContain('<summary class="callout-title">');
+		expect(output).toContain("Collapsed by Default</summary>");
+		expect(output).toContain("Hidden until expanded.");
+		expect(output).not.toContain("- Collapsed");
+		expect(output).not.toContain("$$$callout$$$");
+	});
+
+	test("restores the first paragraph that Rspress drops", async () => {
+		const output = await processHijacked(
+			"> [!warning] Watch Out\n> This paragraph is dropped by Rspress's transform.\n>\n> Second paragraph.\n",
+		);
+
+		expect(output).toContain('class="callout callout-warning"');
+		expect(output).toContain('<div class="callout-title">Watch Out</div>');
+		expect(output).toContain(
+			"This paragraph is dropped by Rspress's transform.",
+		);
+		expect(output).toContain("Second paragraph.");
+	});
+
+	test("restores nested hijacked callouts", async () => {
+		const output = await processHijacked(
+			"> [!note] Outer\n> Outer intro.\n>\n> > [!tip] Inner\n> > Inner content.\n>\n> Outer outro.\n",
+		);
+
+		expect(output).toContain('class="callout callout-note"');
+		expect(output).toContain('class="callout callout-tip"');
+		expect(output).toContain("Outer intro.");
+		expect(output).toContain("Inner content.");
+		expect(output).toContain("Outer outro.");
+	});
+
+	test("leaves ::: directive containers untouched", async () => {
+		const source = ":::note Native Directive\nNative content\n:::\n";
+		const tree = unified().use(remarkParse).use(remarkGfm).parse(source);
+		// Simulate a ::: directive container the way Rspress converts it:
+		// children keep positions pointing at non-blockquote source lines.
+		const root = toTestTree(tree);
+		const paragraph = root.children.find((n) => n.type === "paragraph");
+		const container: TestNode = {
+			type: "containerDirective",
+			name: "$$$callout$$$",
+			attributes: { type: "note", title: "Note" },
+			children: [paragraph ?? { type: "paragraph" }],
+		};
+		root.children = [container];
+
+		const { VFile } = await import("vfile");
+		const file = new VFile({
+			value: source,
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+		await makeTransformer({ enableCallouts: true })(tree, file);
+
+		// remarkStringify cannot serialize containerDirective nodes, so assert
+		// on the tree: the directive must survive untouched.
+		const json = JSON.stringify(tree);
+		expect(json).toContain('"containerDirective"');
+		expect(json).toContain("$$$callout$$$");
+		expect(json).toContain("Native content");
+		expect(json).not.toContain('"html"');
+	});
+
+	test("does not restore when callouts are disabled", async () => {
+		const source = "> [!note] Plain\n> Body\n";
+		const tree = unified().use(remarkParse).use(remarkGfm).parse(source);
+		hijackAlertsLikeRspress(toTestTree(tree));
+		const { VFile } = await import("vfile");
+		const file = new VFile({
+			value: source,
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+		await makeTransformer({})(tree, file);
+
+		const json = JSON.stringify(tree);
+		expect(json).toContain('"containerDirective"');
+		expect(json).toContain("$$$callout$$$");
+		expect(json).not.toContain('"html"');
 	});
 });

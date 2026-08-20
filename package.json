@@ -22,6 +22,7 @@
 	"license": "MIT",
 	"author": "Jacob Valor",
 	"type": "module",
+	"packageManager": "bun@1.3.14",
 	"sideEffects": [
 		"*.css",
 		"./dist/styles.css"
@@ -68,6 +69,7 @@
 		"prepublishOnly": "bun run build && bun run typecheck && bun test",
 		"docs:dev": "bunx rspress dev",
 		"docs:build": "bunx rspress build",
+		"obsidian:sync": "bun scripts/obsidian-sync.ts",
 		"release": "semantic-release --no-ci",
 		"release:dry": "semantic-release --no-ci --dry-run",
 		"postrelease": "git fetch origin main:refs/remotes/origin/main --no-tags || true"
@@ -92,7 +94,6 @@
 		"@semantic-release/release-notes-generator": "^14.1.1",
 		"@types/bun": "latest",
 		"lightningcss": "^1.33.0",
-		"lucide-static": "^1.31.0",
 		"remark-stringify": "^11.0.0",
 		"rspress-plugin-devkit": "^1.0.0",
 		"semantic-release": "^25.0.9",

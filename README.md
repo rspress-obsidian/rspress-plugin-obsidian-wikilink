@@ -26,10 +26,12 @@ Obsidian-style wikilinks for Rspress. Write your docs in Obsidian, publish with 
 | `![[Page#Heading]]` | Transclude a specific section |
 | `![[Page#^block]]` | Transclude a specific block |
 | `![[image.png\|300x200]]` | Embed media with optional size |
+| `[Label](Page.md)` | Standard markdown links resolved like wikilinks (default on) |
+| `![alt](note.md)` | Markdown embed form — transcludes like `![[note]]` |
 | `#tag` | Tag links (opt-in) |
 | `> [!note]` | Callouts with aliases + foldable state (opt-in) |
 | `%% comment %%` | Obsidian comments — stripped from output |
-| `==highlight==` | Text highlighting |
+| `==highlight==` | Text highlighting (including callout titles) |
 | `[^1]` | Footnotes with definitions |
 | `- [ ] task` | Task lists (native Rspress) |
 | Backlinks panel | Auto-generated per page (opt-in) |
@@ -38,7 +40,8 @@ Obsidian-style wikilinks for Rspress. Write your docs in Obsidian, publish with 
 ## Compatibility scope
 
 This plugin targets **static Obsidian-flavored Markdown** published through Rspress. It
-supports wikilinks, heading and block references, unique vault-wide search links,
+supports wikilinks (and their standard markdown `[Label](Page.md)` equivalents),
+heading and block references, unique vault-wide search links,
 transclusion, media embeds, callouts, comments, highlights, tags, footnotes, selected
 frontmatter fields, and backlinks.
 
@@ -56,6 +59,7 @@ The supported static syntax matrix is:
 | Heading and block links | Yes | Yes | Yes |
 | Current-page links | Yes | Yes | Yes |
 | Vault-wide searches | Yes | Yes | Yes |
+| Markdown links (`[x](Page.md)`) and embeds | Yes | Yes | Yes |
 | Page and section transclusion | Yes | Yes | Yes |
 | Media embeds | Yes | Yes | Yes |
 | Callouts | Yes | N/A | Yes |
@@ -69,6 +73,11 @@ target resolution, so a resolver test is not applicable to those capabilities.
 The compatibility fixtures cover Unicode, punctuation, duplicate headings,
 duplicate page names, nested folders, explicit relative paths, and missing
 targets.
+
+Path resolution preserves exact vault-relative file identity before deriving
+Rspress routes, so `foo.md` and `foo/index.md` are resolved independently even
+when the generated site maps both to the same route. Rspress route collisions
+should still be avoided in a publishable vault.
 
 The plugin rewrites wikilinks during the Rspress remark pipeline. All features are opt-in via configuration.
 
@@ -93,6 +102,44 @@ Peer requirements:
 - `@rspress/core`
 - `typescript`
 
+Runtime support:
+
+- Bun `>=1.3.14` is the recommended package manager and development runtime.
+- Node.js `>=22.14.0` remains supported for published plugin consumers.
+
+The repository scripts use Bun, while the compiled plugin uses standard Node.js
+APIs and remains usable from Rspress installations running on Node.js.
+
+## Obsidian autosync
+
+The repository includes a guarded, one-way vault mirror for local preview. Obsidian
+remains the source of truth; the generated directory is disposable Rspress input.
+
+Terminal 1 — sync the vault:
+
+```bash
+bun run obsidian:sync -- \
+  --source /path/to/your/vault \
+  --target .obsidian-rspress-docs \
+  --watch
+```
+
+Terminal 2 — run Rspress against the generated directory:
+
+```bash
+OBSIDIAN_RSPRESS_ROOT=.obsidian-rspress-docs bun run docs:dev
+```
+
+The sync copies visible vault files and assets, debounces save bursts, removes
+files deleted from the vault, and writes a manifest marker before allowing
+subsequent updates. It refuses to use a non-empty target without that marker.
+Hidden directories, `.obsidian`, `node_modules`, build output, and cache
+directories are excluded automatically. This is intentionally one-way; it never
+modifies the vault.
+
+For a one-time mirror, omit `--watch`. Use a dedicated generated target and keep
+it out of version control.
+
 ## Usage
 
 ```ts
@@ -113,7 +160,8 @@ pluginObsidianWikiLink({
   onBrokenLink: "error",              // "error" | "warn" (default: "error")
   onAmbiguousLink: "error",           // "error" | "warn" (default: "error")
   enableFuzzyMatching: false,         // shortest-suffix fallback (default: false)
-  enableCaseInsensitiveLookup: false, // case-insensitive path lookup (default: false)
+  enableCaseInsensitiveLookup: true,  // case-insensitive path lookup (default: true, matches Obsidian)
+  enableMarkdownLinks: true,          // [x](Page.md) resolved like wikilinks (default: true)
   enableTagLinking: false,            // #tag → /tags/tag (default: false)
   enableCallouts: false,              // > [!note] → styled divs (default: false)
   enableBacklinks: false,             // append backlinks panel (default: false)
@@ -141,8 +189,19 @@ pluginObsidianWikiLink({
 
 ### `enableCaseInsensitiveLookup`
 
-- `false` — case-sensitive path/basename lookups (default)
-- `true` — fall back to case-insensitive matching when exact case fails
+- `true` — fall back to case-insensitive matching when exact case fails (default; matches Obsidian, which resolves links to existing files case-insensitively)
+- `false` — strict case-sensitive path/basename lookups
+
+### `enableMarkdownLinks`
+
+- `true` — resolve standard markdown links whose destination is a vault page — `[label](Page.md)`, `[label](./relative.md)`, `[label](Page.md#Heading)` — using the same resolution ladder as wikilinks (default; Obsidian accepts both forms)
+- `false` — markdown links are left for Rspress's own handling
+
+Only `.md` / `.mdx` destinations are considered. External URLs, pure `#anchors`, extensionless routes, and unresolvable destinations are left untouched.
+
+**Dead-link gate.** Rspress resolves `[](x.md)` relative to the current page and fails the build on misses — before plugin remark plugins can resolve vault-style basename links. When this option is on, the plugin therefore defaults `markdown.link.checkDeadLinks` to `false` (an explicit setting in your Rspress config wins) and takes over the diagnostic itself: unresolvable `.md` destinations are reported through `onBrokenLink`, so genuinely broken links still fail the build by default.
+
+The embed form `![alt](note.md)` transcludes the page exactly like `![[note]]` when `enableTransclusion` is on, and renders as a styled link otherwise.
 
 ### `enableTagLinking`
 
@@ -157,6 +216,19 @@ pluginObsidianWikiLink({
 Supported base types: `note`, `tip`, `warning`, `danger`, `info`, `success`, `question`, `bug`, `example`, `quote`
 
 Supported aliases: `abstract`/`summary`/`tldr`, `check`/`done`, `help`/`faq`, `caution`/`attention`, `failure`/`fail`/`missing`
+
+> [!IMPORTANT]
+> **Rspress built-in alert conflict — resolved automatically.** Rspress
+> registers its own GitHub-style alert transform *before* plugin remark
+> plugins run, so `> [!note]`, `[!tip]`, `[!warning]`, `[!caution]`,
+> `[!danger]`, `[!info]`, and `[!details]` blockquotes arrive already
+> converted — with Obsidian's fold suffix (`[!note]-`) leaked into the content
+> and the first paragraph of multi-paragraph alerts dropped. When
+> `enableCallouts` is on, this plugin detects those converted nodes, verifies
+> them against the original source via position information, restores the
+> original blockquotes, and renders every Obsidian callout type with full
+> semantics. Standard `:::note` directive containers keep Rspress's native
+> styling.
 
 **Static callout:**
 ```markdown
@@ -200,6 +272,12 @@ Supports section and block scoping:
 | `![[Page]]` | Inlines full page content (frontmatter stripped) |
 | `![[Page#Heading]]` | Inlines only the content under that heading (ATX and setext) |
 | `![[Page#^block]]` | Inlines only the paragraph annotated with `^block` |
+| `![alt](Page.md)` | Markdown embed form — behaves exactly like `![[Page]]` |
+
+A standalone `^block-id` separated from its block by a blank line still
+references the block above it. When a section cannot be located in the target
+file, the embed renders as a link to the page (with a build warning) instead
+of inlining the entire page — matching Obsidian's unresolved-embed behaviour.
 
 Any wikilinks inside the transcluded content are resolved automatically.
 
@@ -328,15 +406,15 @@ Inline footnote^[This is inline] works differently.
 
 ## Resolution rules
 
-Resolution order for `[[target]]`:
+Resolution order for `[[target]]` (and for `[label](target.md)` markdown links):
 
 1. Explicitly relative path (`./` or `../`) from the current note
 2. Exact vault path match
 3. Unique basename match
 4. Unique frontmatter `title` match
 5. Unique frontmatter `aliases` match
-6. Fuzzy matching (when `enableFuzzyMatching` is enabled)
-7. Case-insensitive fallback (when `enableCaseInsensitiveLookup` is enabled)
+6. Case-insensitive fallback (default; disable with `enableCaseInsensitiveLookup: false`)
+7. Fuzzy matching (when `enableFuzzyMatching` is enabled)
 8. Rejected as broken or ambiguous
 
 Examples:

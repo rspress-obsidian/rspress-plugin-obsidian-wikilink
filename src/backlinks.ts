@@ -1,7 +1,7 @@
 import path from "node:path";
 import { normalizeLookupValue } from "./slug.ts";
 import type { BacklinkRef, ContentIndex, ContentPage } from "./types.ts";
-import { normalizePathKey } from "./utils.ts";
+import { backlinkLabel, normalizeFilePathKey } from "./utils.ts";
 
 export type { BacklinkRef };
 
@@ -81,24 +81,18 @@ function resolveBacklinkTarget(
 		}
 	};
 
-	// Try exact pathKey lookup (the target was already lowercased for dedup,
-	// so use the case-insensitive map to handle mixed-case paths).
-	const pathKey = normalizePathKey(normalizedTarget);
-	const exactPage = index.byPathKey.get(pathKey);
-	if (exactPage) {
-		addPage(exactPage);
+	// Try exact vault-path lookup. The target was already lowercased for
+	// deduplication, so the case-insensitive map handles mixed-case paths.
+	const pathKey = normalizeFilePathKey(normalizedTarget).toLowerCase();
+	const exactCandidates = index.byFilePathKeyCI.get(pathKey);
+	if (exactCandidates) {
+		for (const page of exactCandidates) {
+			addPage(page);
+		}
 		return results;
 	}
 
-	const ciCandidates = index.byPathKeyCI.get(pathKey);
-	if (ciCandidates) {
-		for (const page of ciCandidates) {
-			addPage(page);
-			return results;
-		}
-	}
-
-	// Try basename lookup
+	// Try basename lookup.
 	const baseName = path.basename(pathKey) || pathKey;
 	const baseNameCandidates = index.byBaseName.get(baseName);
 	if (baseNameCandidates) {
@@ -106,7 +100,8 @@ function resolveBacklinkTarget(
 			addPage(page);
 		}
 	}
-	// Also try case-insensitive basename as fallback
+
+	// Also try case-insensitive basename as fallback.
 	if (results.length === 0) {
 		const ciBaseCandidates = index.byBaseNameCI.get(baseName);
 		if (ciBaseCandidates) {
@@ -115,7 +110,6 @@ function resolveBacklinkTarget(
 			}
 		}
 	}
-
 	// Frontmatter title and alias lookups (whitespace-normalized).
 	if (results.length === 0) {
 		const folded = normalizeLookupValue(normalizedTarget);
@@ -140,7 +134,7 @@ function addBacklink(
 	if (!already) {
 		existing.push({
 			routePath: sourcePage.routePath,
-			title: sourcePage.title ?? sourcePage.baseName,
+			title: backlinkLabel(sourcePage),
 		});
 		backlinks.set(targetRoutePath, existing);
 	}

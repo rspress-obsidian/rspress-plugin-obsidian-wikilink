@@ -1,6 +1,57 @@
 import type { ParsedWikiLink, WikilinkMatch } from "./types.ts";
 
-const WIKILINK_PATTERN = /!?\[\[([^[\]]+?)\]\]/g;
+/**
+ * Find a complete wikilink token while honoring backslash escapes inside the
+ * token. A regex cannot distinguish an escaped `]` from the closing `]]`
+ * delimiter, so tokenization is intentionally scanner-based.
+ */
+function findWikilinkEnd(input: string, start: number): number {
+	for (let index = start; index < input.length - 1; index += 1) {
+		if (input[index] === "\\") {
+			index += 1;
+			continue;
+		}
+		if (input[index] === "]" && input[index + 1] === "]") {
+			return index + 2;
+		}
+	}
+	return -1;
+}
+
+/**
+ * Find every `[[...]]` and `![[...]]` occurrence in `input`, returning their
+ * positions and raw contents. Does not parse the inner target/alias/anchor
+ * structure — use {@link parseWikiLink} for that.
+ */
+export function findWikilinkMatches(input: string): WikilinkMatch[] {
+	const matches: WikilinkMatch[] = [];
+
+	for (let index = 0; index < input.length - 1; index += 1) {
+		const isEmbed = input[index] === "!" && input[index + 1] === "[";
+		const openStart = isEmbed ? index + 1 : index;
+		if (input[openStart] !== "[" || input[openStart + 1] !== "[") {
+			continue;
+		}
+
+		const tokenStart = isEmbed ? index : openStart;
+		const innerStart = openStart + 2;
+		const end = findWikilinkEnd(input, innerStart);
+		if (end < 0) {
+			continue;
+		}
+
+		const fullMatch = input.slice(tokenStart, end);
+		matches.push({
+			fullMatch,
+			inner: input.slice(innerStart, end - 2),
+			start: tokenStart,
+			end,
+		});
+		index = end - 1;
+	}
+
+	return matches;
+}
 
 // Characters that can be backslash-escaped inside a wikilink target or alias.
 const UNESCAPE_PATTERN = /\\([|#^[\]])/g;
@@ -30,34 +81,6 @@ function findUnescaped(input: string, delimiter: string): number {
  */
 function unescapeWikilink(input: string): string {
 	return input.replace(UNESCAPE_PATTERN, "$1");
-}
-
-/**
- * Find every `[[...]]` and `![[...]]` occurrence in `input`, returning their
- * positions and raw contents. Does not parse the inner target/alias/anchor
- * structure — use {@link parseWikiLink} for that.
- */
-export function findWikilinkMatches(input: string): WikilinkMatch[] {
-	const matches: WikilinkMatch[] = [];
-
-	for (const match of input.matchAll(WIKILINK_PATTERN)) {
-		const fullMatch = match[0];
-		const inner = match[1];
-		const start = match.index ?? -1;
-
-		if (start < 0 || typeof inner !== "string") {
-			continue;
-		}
-
-		matches.push({
-			fullMatch,
-			inner,
-			start,
-			end: start + fullMatch.length,
-		});
-	}
-
-	return matches;
 }
 
 /**
