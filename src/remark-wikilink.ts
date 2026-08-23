@@ -42,6 +42,7 @@ import type {
 import {
 	formatAvailableBlocks,
 	formatAvailableHeadings,
+	normalizeFilePathKey,
 	normalizeFsPath,
 } from "./utils.ts";
 
@@ -1061,18 +1062,17 @@ async function processMarkdownEmbeds(
 
 	interface EmbedWork {
 		node: Image;
-		position: number;
 		parent: Parent;
 	}
 	const work: EmbedWork[] = [];
 
-	unistVisit(tree, "image", (node, position, parent) => {
-		if (!parent || typeof position !== "number") return;
+	unistVisit(tree, "image", (node, _position, parent) => {
+		if (!parent) return;
 		if (!/\.(md|mdx)([#?]|$)/i.test(node.url)) return;
-		work.push({ node: node as Image, position, parent });
+		work.push({ node: node as Image, parent });
 	});
 
-	for (const { node, position, parent } of work) {
+	for (const { node, parent } of work) {
 		const raw = `![${node.alt ?? ""}](${node.url})`;
 		const parsed = parseMarkdownLinkUrl(node.url, raw, true);
 		if (!parsed) continue;
@@ -1109,11 +1109,12 @@ async function processMarkdownEmbeds(
 					node.alt ?? humanizeBaseName(resolved.targetPage.baseName),
 				);
 
-		(parent as Parent & { children: PhrasingContent[] }).children.splice(
-			position,
-			1,
-			replacement,
-		);
+		const parentWithChildren = parent as Parent & {
+			children: PhrasingContent[];
+		};
+		const currentPosition = parentWithChildren.children.indexOf(node);
+		if (currentPosition < 0) continue;
+		parentWithChildren.children.splice(currentPosition, 1, replacement);
 	}
 }
 
@@ -1133,29 +1134,28 @@ async function processEmbedsInTree(
 		enableCaseInsensitiveLookup: options.enableCaseInsensitiveLookup,
 	};
 
-	// Two-pass approach: collect nodes with their positions, then resolve async
+	// Two-pass approach: collect nodes, then resolve async
 	interface EmbedWork {
 		node: Text;
-		position: number;
 		parent: Parent;
 	}
 	const embedNodes: EmbedWork[] = [];
 
-	unistVisit(tree, "text", (node, position, parent) => {
-		if (!parent || typeof position !== "number") return;
+	unistVisit(tree, "text", (node, _position, parent) => {
+		if (!parent) return;
 		if (SKIP_PARENT_TYPES.has(parent.type)) return;
 		if (!node.value.includes("![")) return;
 		const embedMatches = findWikilinkMatches(node.value).filter((match) =>
 			match.fullMatch.startsWith("!["),
 		);
 		if (embedMatches.length > 0) {
-			embedNodes.push({ node, position, parent });
+			embedNodes.push({ node, parent });
 		}
 	});
 
 	// Process all embed nodes with proper async file reads,
 	// building AST nodes (text + html) instead of a raw HTML string.
-	for (const { node, position, parent } of embedNodes) {
+	for (const { node, parent } of embedNodes) {
 		const text = node.value;
 		const embedMatches = findWikilinkMatches(text).filter((match) =>
 			match.fullMatch.startsWith("!["),
@@ -1186,7 +1186,13 @@ async function processEmbedsInTree(
 				// Obsidian treats a numeric pipe as a size; any other pipe text
 				// is alt/caption text for the image.
 				const altText = sizeAttr ? target : sizeParam.trim() || target;
-				const resolved = resolveMediaSrc(target, docsRoot, currentFilePath);
+				const resolved = resolveMediaSrc(
+					target,
+					docsRoot,
+					currentFilePath,
+					index,
+					options.enableCaseInsensitiveLookup,
+				);
 				if (!resolved.found) {
 					file.message(
 						`[rspress-plugin-obsidian-wikilink:media] Image "${target}" not found on disk for ${fullMatch}.`,
@@ -1198,7 +1204,13 @@ async function processEmbedsInTree(
 					value: `<img src="${src}" alt="${escapeHtmlAttribute(altText)}"${sizeAttr} loading="lazy" />`,
 				});
 			} else if (options.enableMediaEmbeds && AUDIO_EXTS.has(ext)) {
-				const resolved = resolveMediaSrc(target, docsRoot, currentFilePath);
+				const resolved = resolveMediaSrc(
+					target,
+					docsRoot,
+					currentFilePath,
+					index,
+					options.enableCaseInsensitiveLookup,
+				);
 				if (!resolved.found) {
 					file.message(
 						`[rspress-plugin-obsidian-wikilink:media] Audio "${target}" not found on disk for ${fullMatch}.`,
@@ -1211,7 +1223,13 @@ async function processEmbedsInTree(
 				});
 			} else if (options.enableMediaEmbeds && VIDEO_EXTS.has(ext)) {
 				const sizeAttr = parseSizeAttr(sizeParam);
-				const resolved = resolveMediaSrc(target, docsRoot, currentFilePath);
+				const resolved = resolveMediaSrc(
+					target,
+					docsRoot,
+					currentFilePath,
+					index,
+					options.enableCaseInsensitiveLookup,
+				);
 				if (!resolved.found) {
 					file.message(
 						`[rspress-plugin-obsidian-wikilink:media] Video "${target}" not found on disk for ${fullMatch}.`,
@@ -1223,7 +1241,13 @@ async function processEmbedsInTree(
 					value: `<video controls src="${src}"${sizeAttr}></video>`,
 				});
 			} else if (options.enableMediaEmbeds && ext === PDF_EXT) {
-				const resolved = resolveMediaSrc(target, docsRoot, currentFilePath);
+				const resolved = resolveMediaSrc(
+					target,
+					docsRoot,
+					currentFilePath,
+					index,
+					options.enableCaseInsensitiveLookup,
+				);
 				if (!resolved.found) {
 					file.message(
 						`[rspress-plugin-obsidian-wikilink:media] PDF "${target}" not found on disk for ${fullMatch}.`,
@@ -1268,13 +1292,12 @@ async function processEmbedsInTree(
 			replacementNodes.push(createTextNode(text.slice(lastEnd)));
 		}
 
-		// Splice the replacement AST nodes in place of the original text node.
-		// Using html-type nodes instead of embedding HTML in a text node fixes
-		// the escaping bug where transcluded content appeared as escaped HTML.
 		const parentWithChildren = parent as Parent & {
 			children: PhrasingContent[];
 		};
-		parentWithChildren.children.splice(position, 1, ...replacementNodes);
+		const currentPosition = parentWithChildren.children.indexOf(node);
+		if (currentPosition < 0) continue;
+		parentWithChildren.children.splice(currentPosition, 1, ...replacementNodes);
 	}
 }
 
@@ -1355,7 +1378,7 @@ function emitBlockAnchors(tree: Root, currentPage: ContentPage): void {
 		const value = node.value;
 		if (!value.includes("^")) return;
 
-		const standalone = /^\s*\^([A-Za-z0-9-]+)\s*$/.exec(value);
+		const standalone = /^\s*\^([A-Za-z0-9_-]+)\s*$/.exec(value);
 		if (standalone) {
 			const id = standalone[1];
 			if (id && ids.has(id)) {
@@ -1368,7 +1391,7 @@ function emitBlockAnchors(tree: Root, currentPage: ContentPage): void {
 			return;
 		}
 
-		const inline = /\s\^([A-Za-z0-9-]+)\s*$/.exec(value);
+		const inline = /\s\^([A-Za-z0-9_-]+)\s*$/.exec(value);
 		if (inline) {
 			const id = inline[1];
 			if (id && ids.has(id)) {
@@ -1457,6 +1480,8 @@ function resolveMediaSrc(
 	target: string,
 	docsRoot: string,
 	currentFilePath: string,
+	index: ContentIndex,
+	enableCaseInsensitiveLookup: boolean,
 ): MediaResolveResult {
 	// Percent-encode every segment, dropping `..`/`.` so a wikilink target
 	// cannot escape the docs root through the emitted URL.
@@ -1468,6 +1493,31 @@ function resolveMediaSrc(
 			.map((segment) => encodeURIComponent(segment))
 			.join("/")}`;
 
+	const relativeAsset = (
+		absolutePath: string,
+	): MediaResolveResult | undefined => {
+		const relativePath = path.relative(docsRoot, absolutePath);
+		if (
+			relativePath.startsWith("..") ||
+			path.isAbsolute(relativePath) ||
+			relativePath.length === 0
+		) {
+			return undefined;
+		}
+		const pathKey = normalizeFilePathKey(normalizeFsPath(relativePath));
+		const exact = index.byAssetPath.get(pathKey);
+		if (exact) {
+			return { url: exact.urlPath, found: true };
+		}
+		if (!enableCaseInsensitiveLookup) {
+			return undefined;
+		}
+		const candidates = index.byAssetPathCI.get(pathKey.toLowerCase()) ?? [];
+		return candidates.length === 1 && candidates[0]
+			? { url: candidates[0].urlPath, found: true }
+			: undefined;
+	};
+
 	const tryRelToFile = path.resolve(path.dirname(currentFilePath), target);
 	if (fs.existsSync(tryRelToFile)) {
 		const rel = path.relative(docsRoot, tryRelToFile).replace(/\\/g, "/");
@@ -1475,12 +1525,35 @@ function resolveMediaSrc(
 			return { url: encodePath(rel.split("/")), found: true };
 		}
 	}
+	const indexedRelative = relativeAsset(tryRelToFile);
+	if (indexedRelative) {
+		return indexedRelative;
+	}
 
 	const tryRelToRoot = path.resolve(docsRoot, target);
 	if (fs.existsSync(tryRelToRoot)) {
 		const rel = path.relative(docsRoot, tryRelToRoot).replace(/\\/g, "/");
 		if (!rel.startsWith("..") && !path.isAbsolute(rel)) {
 			return { url: encodePath(rel.split("/")), found: true };
+		}
+	}
+	const indexedRoot = relativeAsset(tryRelToRoot);
+	if (indexedRoot) {
+		return indexedRoot;
+	}
+
+	// When no path-qualified asset matched, mirror page wikilinks by accepting
+	// a unique basename, including nested and case-insensitive attachments.
+	const basename = path.basename(normalizeFilePathKey(target));
+	const exactBasename = index.byAssetBaseName.get(basename) ?? [];
+	if (exactBasename.length === 1 && exactBasename[0]) {
+		return { url: exactBasename[0].urlPath, found: true };
+	}
+	if (enableCaseInsensitiveLookup) {
+		const caseInsensitiveBasename =
+			index.byAssetBaseNameCI.get(basename.toLowerCase()) ?? [];
+		if (caseInsensitiveBasename.length === 1 && caseInsensitiveBasename[0]) {
+			return { url: caseInsensitiveBasename[0].urlPath, found: true };
 		}
 	}
 
@@ -2105,7 +2178,7 @@ function extractBlockSection(
 		}
 
 		// Inline block ID appended to a line: references that whole block.
-		const inlineMatch = line.match(/^(.*?)\s+\^([A-Za-z0-9-]+)\s*$/);
+		const inlineMatch = line.match(/^(.*?)\s+\^([A-Za-z0-9_-]+)\s*$/);
 		if (inlineMatch && inlineMatch[2]?.toLowerCase() === normalizedId) {
 			const text = (inlineMatch[1] ?? "").trimEnd();
 			return extractInlineBlock(lines, i, text) || undefined;

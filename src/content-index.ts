@@ -169,6 +169,7 @@ async function buildContentIndexFromFiles(
 	const byPathKeyCI = new Map<string, ContentPage[]>();
 	const byFilePathKeyCI = new Map<string, ContentPage[]>();
 	const byBaseNameCI = new Map<string, ContentPage[]>();
+	const byAssetPathCI = new Map<string, ContentAsset[]>();
 	const byAssetBaseNameCI = new Map<string, ContentAsset[]>();
 
 	for (const page of pages) {
@@ -207,6 +208,7 @@ async function buildContentIndexFromFiles(
 	}
 	for (const asset of assets) {
 		byAssetPath.set(asset.pathKey, asset);
+		pushNamedAsset(byAssetPathCI, asset.pathKey.toLowerCase(), asset);
 		const existing = byAssetBaseName.get(asset.baseName) ?? [];
 		existing.push(asset);
 		byAssetBaseName.set(asset.baseName, existing);
@@ -249,6 +251,7 @@ async function buildContentIndexFromFiles(
 		byPathKeyCI,
 		byFilePathKeyCI,
 		byBaseNameCI,
+		byAssetPathCI,
 		byAssetBaseNameCI,
 		rawContentByPath,
 		backlinks,
@@ -274,6 +277,20 @@ function resolveBacklinkTarget(
 		}
 	};
 
+	const relativePathKey = resolveRelativePathKey(
+		sourcePage.relativePath,
+		normalizedTarget,
+	);
+	if (relativePathKey !== undefined) {
+		const relativePages = byFilePathKeyCI.get(relativePathKey.toLowerCase());
+		if (relativePages) {
+			for (const page of relativePages) {
+				addPage(page);
+			}
+		}
+		return results;
+	}
+
 	const exactPage = byFilePathKey.get(normalizedTarget);
 	if (exactPage) {
 		addPage(exactPage);
@@ -286,20 +303,6 @@ function resolveBacklinkTarget(
 	if (exactCaseInsensitivePage) {
 		for (const page of exactCaseInsensitivePage) {
 			addPage(page);
-		}
-		return results;
-	}
-
-	const relativePathKey = resolveRelativePathKey(
-		sourcePage.relativePath,
-		normalizedTarget,
-	);
-	if (relativePathKey !== undefined) {
-		const relativePages = byFilePathKeyCI.get(relativePathKey.toLowerCase());
-		if (relativePages) {
-			for (const page of relativePages) {
-				addPage(page);
-			}
 		}
 		return results;
 	}
@@ -644,20 +647,14 @@ function extractBlocks(lines: string[], isContent: boolean[]): BlockEntry[] {
 
 		const line = lines[index] ?? "";
 
-		const standaloneMatch = /^\^([A-Za-z0-9-]+)\s*$/.exec(line.trim());
+		const standaloneMatch = /^\^([A-Za-z0-9_-]+)\s*$/.exec(line.trim());
 		if (standaloneMatch?.[1]) {
 			pushBlock(blocks, seen, standaloneMatch[1]);
 			continue;
 		}
 
-		const explicitIdMatch = line.match(/\{#([A-Za-z0-9-]+)\}\s*$/);
-		if (explicitIdMatch?.[1] && !/^\s{0,3}(#{1,6})[ \t]+/.test(line)) {
-			pushBlock(blocks, seen, explicitIdMatch[1]);
-			continue;
-		}
-
 		// Inline block ID: "Paragraph text ^block-id" appended at end of line
-		const inlineBlockMatch = /\s\^([A-Za-z0-9-]+)\s*$/.exec(line);
+		const inlineBlockMatch = /\s\^([A-Za-z0-9_-]+)\s*$/.exec(line);
 		if (inlineBlockMatch?.[1]) {
 			pushBlock(blocks, seen, inlineBlockMatch[1]);
 		}

@@ -1,5 +1,5 @@
 ---
-description: Complete API reference for rspress-plugin-obsidian-wikilink. Covers pluginObsidianWikiLink, buildContentIndex, parseWikiLink, resolveWikiLink, encodeTagPathSegment, generateTagPages, backlinks, and all TypeScript types.
+description: Complete API reference for rspress-plugin-obsidian-wikilink. Covers the plugin, content and backlink indexes, daily-note and Dataview helpers, wikilink parsing and resolution, tag pages, and all public TypeScript types.
 ---
 
 # API Reference
@@ -33,17 +33,21 @@ export default defineConfig({
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `onBrokenLink` | `"error" \| "warn"` | `"error"` | How to handle missing link targets |
-| `onAmbiguousLink` | `"error" \| "warn"` | `"error"` | How to handle ambiguous links |
+| `onBrokenLink` | `DiagnosticMode` | `"error"` | How to handle missing link targets |
+| `onAmbiguousLink` | `DiagnosticMode` | `"error"` | How to handle ambiguous links |
 | `enableFuzzyMatching` | `boolean` | `false` | Enable shortest-suffix path fallback |
 | `enableCaseInsensitiveLookup` | `boolean` | `true` | Case-insensitive path resolution (matches Obsidian; set `false` for strict matching) |
 | `enableMarkdownLinks` | `boolean` | `true` | Resolve `[label](Page.md)` markdown links and `![alt](note.md)` embeds against the vault |
+| `onDataviewError` | `DiagnosticMode` | `"error"` | How to report invalid or unsupported Dataview blocks |
+| `enableDataview` | `boolean` | `false` | Evaluate static Dataview DQL blocks and inline expressions at build time |
+| `enableDailyNotes` | `boolean` | `false` | Enable static Daily Notes date expansion and navigation |
+| `dailyNotes` | `DailyNotesOptions` | `{ folder: "", dateFormat: "YYYY-MM-DD", navigation: true }` | Configure the Daily Notes folder, filename format, and navigation |
 | `enableTagLinking` | `boolean` | `false` | Convert `#tag` to `/tags/tag` links |
-| `enableTagPages` | `boolean` | `false` | Generate `/tags/{name}` index pages |
 | `enableCallouts` | `boolean` | `false` | Transform `> [!note]` callouts |
 | `enableBacklinks` | `boolean` | `false` | Append backlinks panel to each page |
 | `enableTransclusion` | `boolean` | `false` | Inline `![[Page]]` content |
 | `enableMediaEmbeds` | `boolean` | `false` | Render `![[img.png]]` as `<img>` |
+| `enableTagPages` | `boolean` | `false` | Generate `/tags/{name}` index pages |
 | `enableDefaultStyles` | `boolean` | `false` | Inject bundled CSS stylesheet |
 
 ## Content Index
@@ -69,6 +73,89 @@ import { getCachedContentIndex } from "rspress-plugin-obsidian-wikilink";
 
 const index = await getCachedContentIndex("/path/to/docs");
 ```
+
+## Daily Notes
+
+The daily-note helpers are also available for integrations that need to expand
+date templates or render navigation outside the plugin pipeline. Their
+configuration uses this structural shape:
+
+```ts
+{
+  folder: string;
+  dateFormat: string;
+  navigation: boolean;
+}
+```
+
+The helper module calls this shape `DailyNoteConfig`; that name is not
+re-exported from the package. For plugin configuration, use the exported
+`DailyNotesOptions` type instead.
+
+### `normalizeDailyNoteConfig(config?: Partial<DailyNoteConfig>): DailyNoteConfig`
+
+Normalizes an optional daily-note configuration. The defaults are an empty
+folder, `YYYY-MM-DD` filenames, and navigation enabled.
+
+```ts
+import { normalizeDailyNoteConfig } from "rspress-plugin-obsidian-wikilink";
+
+const config = normalizeDailyNoteConfig({
+  folder: "Daily",
+  dateFormat: "YYYY-MM-DD",
+  navigation: true,
+});
+```
+
+### `parseDailyNoteDate(relativePath: string, config: DailyNoteConfig): Date | undefined`
+
+Parses a date-formatted daily-note path. Returns `undefined` when the path is
+outside the configured folder, does not match the configured format, or
+contains an invalid calendar date.
+
+### `formatDailyNoteDate(date: Date, format: string): string`
+
+Formats a UTC date using the supported tokens `YYYY`, `YY`, `MMMM`, `MMM`,
+`MM`, `M`, `DD`, `D`, `dddd`, and `ddd`.
+
+### `expandDailyTemplateText(value: string, date: Date): string`
+
+Expands `{{date}}` placeholders and optional format/offset expressions such as
+`{{date:MMMM D, YYYY}}` and `{{date-1d}}`.
+
+### `renderDailyNavigation(currentPage: ContentPage, pages: ContentPage[], config: DailyNoteConfig): string`
+
+Renders the previous/current/next daily-note navigation HTML. Returns an empty
+string when navigation is disabled or the current page is not a dated note.
+
+## Dataview
+
+These helpers evaluate the static Dataview subset supported by the plugin.
+DataviewJS is not executed.
+
+### `extractDataviewMetadata(markdown: string, frontmatter: Record<string, unknown>, filePath: string): { fields: Record<string, unknown>; tasks: DataviewTask[]; lists: DataviewListItem[] }`
+
+Extracts normalized fields, tasks, and list items from a Markdown document:
+
+```ts
+{
+  fields: Record<string, unknown>;
+  tasks: DataviewTask[];
+  lists: DataviewListItem[];
+}
+```
+
+### `renderDataviewQuery(query: string, currentPage: ContentPage, index: ContentIndex, dailyConfig?: DailyNoteConfig): { html?: string; error?: string }`
+
+Evaluates a static `TABLE`, `LIST`, `TASK`, or `CALENDAR` query and returns
+rendered HTML on success. Unsupported or invalid queries return an `error`
+instead.
+
+### `renderDataviewInline(expression: string, currentPage: ContentPage, index: ContentIndex, dailyConfig?: DailyNoteConfig): { html?: string; error?: string }`
+
+Evaluates one static Dataview inline expression and returns a rendered
+`<span>` on success, or an `error` for an unsupported expression.
+
 
 ## Wikilink Parsing
 
@@ -188,19 +275,63 @@ encodeTagPathSegment("中文");          // "中文"
 
 ### `RspressPluginObsidianWikiLinkOptions`
 
+All properties are optional. The defaults below are applied by
+`pluginObsidianWikiLink`.
+
 ```ts
 interface RspressPluginObsidianWikiLinkOptions {
-  onBrokenLink?: "error" | "warn";
-  onAmbiguousLink?: "error" | "warn";
+  onBrokenLink?: DiagnosticMode;
+  onAmbiguousLink?: DiagnosticMode;
   enableFuzzyMatching?: boolean;
   enableCaseInsensitiveLookup?: boolean;
+  enableMarkdownLinks?: boolean;
+  onDataviewError?: DiagnosticMode;
+  enableDataview?: boolean;
+  enableDailyNotes?: boolean;
+  dailyNotes?: DailyNotesOptions;
   enableTagLinking?: boolean;
-  enableTagPages?: boolean;
   enableCallouts?: boolean;
   enableBacklinks?: boolean;
   enableTransclusion?: boolean;
   enableMediaEmbeds?: boolean;
+  enableTagPages?: boolean;
   enableDefaultStyles?: boolean;
+}
+```
+
+### `NormalizedPluginOptions`
+
+The fully populated options object passed to the remark pipeline:
+
+```ts
+interface NormalizedPluginOptions {
+  onBrokenLink: DiagnosticMode;
+  onAmbiguousLink: DiagnosticMode;
+  enableFuzzyMatching: boolean;
+  enableCaseInsensitiveLookup: boolean;
+  enableMarkdownLinks: boolean;
+  onDataviewError: DiagnosticMode;
+  enableDataview: boolean;
+  enableDailyNotes: boolean;
+  dailyNotes: Required<DailyNotesOptions>;
+  enableTagLinking: boolean;
+  enableCallouts: boolean;
+  enableBacklinks: boolean;
+  enableTransclusion: boolean;
+  enableMediaEmbeds: boolean;
+  enableTagPages: boolean;
+  enableDefaultStyles: boolean;
+}
+```
+
+
+### `DailyNotesOptions`
+
+```ts
+interface DailyNotesOptions {
+  folder?: string;
+  dateFormat?: string;
+  navigation?: boolean;
 }
 ```
 
@@ -208,49 +339,94 @@ interface RspressPluginObsidianWikiLinkOptions {
 
 ```ts
 interface ParsedWikiLink {
-  raw: string;       // Original wikilink text e.g. "[[Page#Heading|Alias]]"
-  target: string;    // Target page path e.g. "Page"
-  alias?: string;    // Custom display text e.g. "Alias"
-  isEmbed: boolean;  // True when the wikilink starts with ![[
-  subpath?: {
-    kind: "heading" | "block";
-    value: string;   // Heading text or block ID (without ^)
-  };
-  isCurrentPageReference: boolean; // True for [[#Heading]] (no target)
+  raw: string;
+  target: string;
+  alias?: string;
+  isEmbed: boolean;
+  subpath?: WikiSubpath;
+  search?: "heading" | "block";
+  isCurrentPageReference: boolean;
 }
 ```
 
+### `ContentAsset`
+
+```ts
+interface ContentAsset {
+  absolutePath: string;
+  relativePath: string;
+  pathKey: string;
+  baseName: string;
+  urlPath: string;
+}
+```
 ### `WikilinkMatch`
+
+The raw match metadata returned by `findWikilinkMatches` before parsing:
 
 ```ts
 interface WikilinkMatch {
-  fullMatch: string; // The full wikilink e.g. "[[Page]]"
-  inner: string;     // Content between [[ and ]] e.g. "Page"
-  start: number;     // Start index in source string
-  end: number;       // End index in source string
+  fullMatch: string;
+  inner: string;
+  start: number;
+  end: number;
 }
 ```
+
+`start` and `end` are JavaScript string offsets, with `end` exclusive.
+
+### `DataviewTask`
+
+```ts
+interface DataviewTask {
+  text: string;
+  completed: boolean;
+  line: number;
+  path: string;
+  fields: Record<string, unknown>;
+}
+```
+
+### `DataviewListItem`
+
+```ts
+interface DataviewListItem {
+  text: string;
+  line: number;
+  path: string;
+  fields: Record<string, unknown>;
+}
+```
+
 
 ### `ContentPage`
 
 ```ts
+
 interface ContentPage {
   absolutePath: string;        // Absolute file path on disk
   relativePath: string;        // Relative to docs root e.g. "guide/intro.md"
   routePath: string;           // Rspress route e.g. "/guide/intro"
-  pathKey: string;             // Normalised path key e.g. "guide/intro"
+  pathKey: string;             // Route-oriented key e.g. "guide/intro"
+  filePathKey: string;         // Exact vault-relative key without ".md"
   baseName: string;            // Filename without extension e.g. "intro"
   title?: string;              // Frontmatter title
   aliases: string[];           // Frontmatter aliases
   tags: string[];              // Frontmatter tags
   cssclasses: string[];        // Frontmatter cssclasses
   excerpt?: string;            // Frontmatter excerpt
-  publish: boolean;            // Frontmatter publish (default: true)
+  publish: boolean;             // Frontmatter publish (default: true)
+  fileCtimeMs: number;          // File creation time in milliseconds
+  fileMtimeMs: number;          // File modification time in milliseconds
+  fileSizeBytes: number;        // File size in bytes
   headings: HeadingEntry[];    // Parsed headings from the file
-  wikilinkTargets: string[];   // Pre-extracted, deduplicated wikilink targets (used for backlinks)
+  wikilinkTargets: string[];   // Pre-extracted wikilink targets (used for backlinks)
   headingBySlug: Map<string, HeadingEntry>;   // Slug → heading, O(1) resolution
   headingByText: Map<string, HeadingEntry>;   // Normalized text → heading, O(1) resolution
   blocks: BlockEntry[];        // Parsed block IDs from the file
+  dataviewFields: Record<string, unknown>; // Frontmatter and inline Dataview fields
+  dataviewTasks: DataviewTask[];            // Tasks extracted for static Dataview queries
+  dataviewLists: DataviewListItem[];        // List items extracted for static Dataview queries
 }
 ```
 
@@ -260,16 +436,23 @@ interface ContentPage {
 interface ContentIndex {
   rootDir: string;
   pages: ContentPage[];
+  assets: ContentAsset[];
   byAbsolutePath: Map<string, ContentPage>;
-  byPathKey: Map<string, ContentPage>;
+  byPathKey: Map<string, ContentPage>;          // Route-oriented lookup
+  byFilePathKey: Map<string, ContentPage>;      // Exact vault-relative lookup
   byBaseName: Map<string, ContentPage[]>;
   byTitle: Map<string, ContentPage[]>;
   byAlias: Map<string, ContentPage[]>;
   byTag: Map<string, ContentPage[]>;
-  byPathKeyCI: Map<string, ContentPage[]>;     // Case-insensitive pathKey lookup
-  byBaseNameCI: Map<string, ContentPage[]>;    // Case-insensitive basename lookup
-  rawContentByPath: Map<string, string>;       // Raw markdown content, used by transclusion
-  backlinks: Map<string, BacklinkRef[]>;        // Pre-built during indexing
+  byAssetPath: Map<string, ContentAsset>;
+  byAssetBaseName: Map<string, ContentAsset[]>;
+  byPathKeyCI: Map<string, ContentPage[]>;
+  byFilePathKeyCI: Map<string, ContentPage[]>;
+  byBaseNameCI: Map<string, ContentPage[]>;
+  byAssetPathCI: Map<string, ContentAsset[]>;   // Case-insensitive exact asset lookup
+  byAssetBaseNameCI: Map<string, ContentAsset[]>;
+  rawContentByPath: Map<string, string>;       // Raw markdown for transclusion
+  backlinks: Map<string, BacklinkRef[]>;       // Pre-built during indexing
 }
 ```
 
@@ -292,16 +475,26 @@ interface BlockEntry {
 }
 ```
 
+### `ResolveStatus`
+
+```ts
+type ResolveStatus =
+  | "ok"
+  | "broken-page"
+  | "broken-anchor"
+  | "ambiguous-page";
+```
+
 ### `ResolvedWikiLink`
 
 ```ts
 interface ResolvedWikiLink {
-  status: "ok" | "broken-page" | "broken-anchor" | "ambiguous-page";
-  href?: string;          // Final URL e.g. "/guide/intro#install"
-  label?: string;         // Display text
+  status: ResolveStatus;
+  href?: string;
+  label?: string;
   targetPage?: ContentPage;
-  message?: string;       // Diagnostic message on non-ok status
-  description?: string;   // Heading content preview for tooltips
+  message?: string;
+  description?: string;
 }
 ```
 
@@ -311,12 +504,15 @@ interface ResolvedWikiLink {
 interface ResolveContext {
   currentPage: ContentPage;
   index: ContentIndex;
-  options?: {
-    enableFuzzyMatching?: boolean;
-    enableCaseInsensitiveLookup?: boolean;
-  };
+  options?: Partial<
+    Pick<
+      NormalizedPluginOptions,
+      "enableFuzzyMatching" | "enableCaseInsensitiveLookup"
+    >
+  >;
 }
 ```
+
 
 ### `BacklinkRef`
 
@@ -351,11 +547,3 @@ interface AdditionalPage {
 }
 ```
 
-### `RemarkWikiLinkPluginOptions`
-
-```ts
-interface RemarkWikiLinkPluginOptions {
-  getDocsRoot: () => string;
-  options: NormalizedPluginOptions;
-}
-```

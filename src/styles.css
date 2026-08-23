@@ -329,6 +329,14 @@ html.dark .rp-callout {
 	gap: 0.5rem;
 }
 
+.obsidian-backlinks li {
+	margin: 0;
+}
+
+.obsidian-backlinks li:not(:first-child) {
+	margin-top: 0;
+}
+
 .obsidian-backlinks a {
 	display: inline-block;
 	padding: 0.25rem 0.75rem;

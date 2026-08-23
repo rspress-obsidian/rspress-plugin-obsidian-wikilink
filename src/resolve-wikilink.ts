@@ -67,6 +67,32 @@ export function resolveWikiLink(
 			return resolveAgainstAsset(relativeAsset, parsed);
 		}
 
+		if (context.options?.enableCaseInsensitiveLookup) {
+			const relativePageResolution = resolveCandidateSet(
+				context.index.byFilePathKeyCI.get(relativePathKey.toLowerCase()) ?? [],
+				parsed.target,
+				"a more specific path",
+			);
+			if (relativePageResolution) {
+				return relativePageResolution.kind === "resolved"
+					? resolveAgainstPage(relativePageResolution.page, parsed)
+					: relativePageResolution.result;
+			}
+
+			const relativeAssets =
+				context.index.byAssetPathCI.get(relativePathKey.toLowerCase()) ?? [];
+			if (relativeAssets.length === 1) {
+				const asset = relativeAssets[0];
+				if (asset) return resolveAgainstAsset(asset, parsed);
+			}
+			if (relativeAssets.length > 1) {
+				return {
+					status: "ambiguous-page",
+					message: `Wikilink target "${parsed.target}" matches multiple attachments; use a case-sensitive path.`,
+				};
+			}
+		}
+
 		return {
 			status: "broken-page",
 			message: `Unable to resolve relative wikilink target "${parsed.target}" from ${context.currentPage.relativePath}.`,

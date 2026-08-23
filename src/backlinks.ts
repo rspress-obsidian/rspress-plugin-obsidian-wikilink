@@ -1,7 +1,11 @@
 import path from "node:path";
 import { normalizeLookupValue } from "./slug.ts";
 import type { BacklinkRef, ContentIndex, ContentPage } from "./types.ts";
-import { backlinkLabel, normalizeFilePathKey } from "./utils.ts";
+import {
+	backlinkLabel,
+	normalizeFilePathKey,
+	resolveRelativePathKey,
+} from "./utils.ts";
 
 export type { BacklinkRef };
 
@@ -52,7 +56,7 @@ export async function buildBacklinksIndex(
 		const targets = page.wikilinkTargets;
 
 		for (const normalizedTarget of targets) {
-			const resolved = resolveBacklinkTarget(index, normalizedTarget);
+			const resolved = resolveBacklinkTarget(index, normalizedTarget, page);
 			for (const candidate of resolved) {
 				if (candidate.absolutePath === page.absolutePath) continue;
 				addBacklink(backlinks, candidate.routePath, page);
@@ -70,6 +74,7 @@ export async function buildBacklinksIndex(
 function resolveBacklinkTarget(
 	index: ContentIndex,
 	normalizedTarget: string,
+	sourcePage: ContentPage,
 ): ContentPage[] {
 	const seen = new Set<string>();
 	const results: ContentPage[] = [];
@@ -81,6 +86,23 @@ function resolveBacklinkTarget(
 		}
 	};
 
+	// Explicitly relative targets are resolved from the source page, just as
+	// normal wikilink navigation does. A missing relative target must not fall
+	// through to a global basename/title/alias match.
+	const relativePathKey = resolveRelativePathKey(
+		sourcePage.relativePath,
+		normalizedTarget,
+	);
+	if (relativePathKey !== undefined) {
+		const relativeCandidates = index.byFilePathKeyCI.get(
+			relativePathKey.toLowerCase(),
+		);
+		for (const page of relativeCandidates ?? []) {
+			addPage(page);
+		}
+		return results;
+	}
+
 	// Try exact vault-path lookup. The target was already lowercased for
 	// deduplication, so the case-insensitive map handles mixed-case paths.
 	const pathKey = normalizeFilePathKey(normalizedTarget).toLowerCase();
@@ -91,7 +113,6 @@ function resolveBacklinkTarget(
 		}
 		return results;
 	}
-
 	// Try basename lookup.
 	const baseName = path.basename(pathKey) || pathKey;
 	const baseNameCandidates = index.byBaseName.get(baseName);

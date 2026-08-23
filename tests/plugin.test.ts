@@ -603,6 +603,56 @@ describe("resolveWikiLink", () => {
 			{ routePath: "/notes/current", title: "Current Note" },
 		]);
 	});
+	test("resolves case-insensitive relative page and asset paths when enabled", async () => {
+		const pageIndex = await buildContentIndex(fixtureRoot);
+		const pageCurrent = pageIndex.byFilePathKey.get("index")!;
+		const pageResult = resolveWikiLink(
+			parseWikiLink("./GUIDE/GETTING-STARTED", "[[./GUIDE/GETTING-STARTED]]"),
+			{
+				currentPage: pageCurrent,
+				index: pageIndex,
+				options: { enableCaseInsensitiveLookup: true },
+			},
+		);
+		const strictPageResult = resolveWikiLink(
+			parseWikiLink("./GUIDE/GETTING-STARTED", "[[./GUIDE/GETTING-STARTED]]"),
+			{
+				currentPage: pageCurrent,
+				index: pageIndex,
+				options: { enableCaseInsensitiveLookup: false },
+			},
+		);
+
+		const assetIndex = await buildContentIndex(assetsFixtureRoot);
+		const assetCurrent = assetIndex.byFilePathKey.get("index")!;
+		const assetResult = resolveWikiLink(
+			parseWikiLink("./IMAGE.PNG", "[[./IMAGE.PNG]]"),
+			{
+				currentPage: assetCurrent,
+				index: assetIndex,
+				options: { enableCaseInsensitiveLookup: true },
+			},
+		);
+		const strictAssetResult = resolveWikiLink(
+			parseWikiLink("./IMAGE.PNG", "[[./IMAGE.PNG]]"),
+			{
+				currentPage: assetCurrent,
+				index: assetIndex,
+				options: { enableCaseInsensitiveLookup: false },
+			},
+		);
+
+		expect(pageResult).toMatchObject({
+			status: "ok",
+			href: "/guide/getting-started",
+		});
+		expect(strictPageResult.status).toBe("broken-page");
+		expect(assetResult).toMatchObject({
+			status: "ok",
+			href: "/image.png",
+		});
+		expect(strictAssetResult.status).toBe("broken-page");
+	});
 
 	test("does not fall back from an unresolved relative wikilink", async () => {
 		const index = await buildContentIndex(compatibilityFixtureRoot);
@@ -967,6 +1017,10 @@ describe("remarkWikilink", () => {
 				"^standalone-block",
 				"",
 				"A paragraph with an inline block ID. ^inline-block",
+				"",
+				"^standalone_block",
+				"",
+				"A paragraph with an underscore inline block ID. ^inline_block",
 			].join("\n"),
 			path: path.resolve(inlineBlocksFixtureRoot, "guide/inline-target.md"),
 		});
@@ -974,6 +1028,8 @@ describe("remarkWikilink", () => {
 		const output = String(file);
 		expect(output).toContain('id="^standalone-block"');
 		expect(output).toContain('id="^inline-block"');
+		expect(output).toContain('id="^standalone_block"');
+		expect(output).toContain('id="^inline_block"');
 	});
 
 	test("rewrites embeds into embed html anchors", async () => {
@@ -1042,6 +1098,21 @@ describe("transclusion", () => {
 		const output = String(file);
 		expect(output).toContain('class="obsidian-transclusion"');
 		expect(output).toContain("Install steps");
+	});
+
+	test("transcludes an underscore inline block ID", async () => {
+		const processor = makeProcessor(inlineBlocksFixtureRoot, {
+			enableTransclusion: true,
+		});
+		const file = await processor.process({
+			value: "![[guide/inline-target#^inline_block]]",
+			path: path.resolve(inlineBlocksFixtureRoot, "index.md"),
+		});
+		const output = String(file);
+		expect(output).toContain('class="obsidian-transclusion"');
+		expect(output).toContain(
+			"A paragraph with an inline block ID containing an underscore.",
+		);
 	});
 
 	test("transcludes full block content including nested list items", async () => {
@@ -1190,6 +1261,34 @@ describe("inline block ID indexing", () => {
 		const page = index.byPathKey.get("guide/inline-target");
 
 		expect(page?.blocks.map((b) => b.id)).toContain("inline-block");
+	});
+
+	test("indexes underscore block IDs in standalone and inline forms", async () => {
+		const index = await buildContentIndex(inlineBlocksFixtureRoot);
+		const page = index.byPathKey.get("guide/inline-target");
+		const ids = page?.blocks.map((block) => block.id) ?? [];
+
+		expect(ids).toEqual(
+			expect.arrayContaining(["standalone_block", "inline_block"]),
+		);
+	});
+
+	test("resolves a wikilink to an underscore block ID", async () => {
+		const index = await buildContentIndex(inlineBlocksFixtureRoot);
+		const currentPage = index.byPathKey.get("")!;
+
+		const result = resolveWikiLink(
+			parseWikiLink(
+				"guide/inline-target#^inline_block",
+				"[[guide/inline-target#^inline_block]]",
+			),
+			{ currentPage, index },
+		);
+
+		expect(result).toMatchObject({
+			status: "ok",
+			href: "/guide/inline-target#^inline_block",
+		});
 	});
 
 	test("resolves wikilink to an inline block ID", async () => {
@@ -2001,6 +2100,28 @@ describe("media embeds", () => {
 			'<iframe src="/Document.pdf#height=400" width="100%" height="400px"',
 		);
 	});
+	test("preserves order and sibling nodes for multiple inline media embeds", async () => {
+		const processor = makeProcessor(assetsFixtureRoot, {
+			enableMediaEmbeds: true,
+		});
+		const file = await processor.process({
+			value: "Before ![[image.png]] **middle** ![[Document.pdf]] after",
+			path: path.resolve(assetsFixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		const imagePosition = output.indexOf('<img src="/image.png"');
+		const middlePosition = output.indexOf("middle");
+		const pdfPosition = output.indexOf('<iframe src="/Document.pdf"');
+
+		expect(imagePosition).toBeGreaterThanOrEqual(0);
+		expect(middlePosition).toBeGreaterThan(imagePosition);
+		expect(pdfPosition).toBeGreaterThan(middlePosition);
+		expect(output).toContain("Before");
+		expect(output).toContain("after");
+		expect(output).not.toContain("![[image.png]]");
+		expect(output).not.toContain("![[Document.pdf]]");
+	});
 
 	test("preserves image fragments", async () => {
 		const processor = makeProcessor(assetsFixtureRoot, {
@@ -2072,6 +2193,15 @@ describe("backlinks HTML", () => {
 
 		expect(backlinks.get("/guide/getting-started")).toEqual([
 			{ routePath: "/", title: "Home" },
+		]);
+	});
+	test("builds backlinks for note-relative wikilinks", async () => {
+		const { buildBacklinksIndex } = await import("../src/backlinks");
+		const index = await buildContentIndex(compatibilityFixtureRoot);
+		const backlinks = await buildBacklinksIndex(index);
+
+		expect(backlinks.get("/shared/Concept")).toEqual([
+			{ routePath: "/notes/current", title: "Current Note" },
 		]);
 	});
 });
@@ -2356,6 +2486,10 @@ describe("bundled stylesheet", () => {
 		expect(sourceStyles.length).toBeGreaterThan(0);
 		expect(sourceStyles).toContain(".callout");
 		expect(sourceStyles).toContain(".obsidian-backlinks");
+		expect(sourceStyles).toContain(".obsidian-backlinks li {\n\tmargin: 0;\n}");
+		expect(sourceStyles).toContain(
+			".obsidian-backlinks li:not(:first-child) {\n\tmargin-top: 0;\n}",
+		);
 		expect(sourceStyles).toContain(".obsidian-transclusion");
 		expect(sourceStyles).toContain(".obsidian-embed");
 		expect(sourceStyles).toContain("html.dark");
@@ -2365,6 +2499,10 @@ describe("bundled stylesheet", () => {
 		expect(sourceStyles).toContain("callout-danger");
 		expect(sourceStyles).toContain("callout-quote");
 		expect(distStyles.length).toBeGreaterThan(0);
+		expect(distStyles).toContain(".obsidian-backlinks li{margin:0}");
+		expect(distStyles).toContain(
+			".obsidian-backlinks li:not(:first-child){margin-top:0}",
+		);
 		expect(distStyles).toContain(".callout");
 		expect(distStyles).toContain("html.dark");
 	});

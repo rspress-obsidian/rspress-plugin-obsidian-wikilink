@@ -250,6 +250,8 @@ export interface ContentIndex {
 	byFilePathKeyCI: Map<string, ContentPage[]>;
 	/** Case-insensitive basename → pages lookup. */
 	byBaseNameCI: Map<string, ContentPage[]>;
+	/** Case-insensitive exact vault attachment path → assets lookup. */
+	byAssetPathCI: Map<string, ContentAsset[]>;
 	/** Case-insensitive attachment basename → assets lookup. */
 	byAssetBaseNameCI: Map<string, ContentAsset[]>;
 	/** Raw markdown content keyed by absolute path, used by transclusion during the remark pass. */
