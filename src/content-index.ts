@@ -432,7 +432,9 @@ async function buildContentPage(
 		return { page: cached.page, rawMarkdown: cached.rawMarkdown };
 	}
 
-	const markdown = await fs.promises.readFile(file.absolutePath, "utf-8");
+	const markdown = (
+		await fs.promises.readFile(file.absolutePath, "utf-8")
+	).replace(/\r\n?/g, "\n");
 	const routePath = deriveRoutePath(file.relativePath);
 	const pathKey = normalizePathKey(file.relativePath);
 	const baseName = path.basename(pathKey);

@@ -841,6 +841,29 @@ describe("transclusion", () => {
 	});
 });
 
+describe("transclusion with CRLF source files", () => {
+	const crlfFixtureRoot = path.resolve(
+		process.cwd(),
+		"tests/fixtures/transclusion-crlf",
+	);
+
+	test("applies callouts and footnotes in CRLF transcluded content", async () => {
+		const processor = makeProcessor(crlfFixtureRoot, {
+			enableCallouts: true,
+			enableTransclusion: true,
+		});
+		const file = await processor.process({
+			value: "![[source]]",
+			path: path.resolve(crlfFixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain('data-callout="tip"');
+		expect(output).toContain("First line. Second line.");
+		expect(output).not.toContain("\r");
+	});
+});
+
 describe("tag linking", () => {
 	test("rewrites tags into markdown links", async () => {
 		const processor = makeProcessor(fixtureRoot, {
@@ -877,6 +900,24 @@ describe("callouts", () => {
 		expect(output).toContain('<div class="callout-content">');
 		expect(output).toContain("Body text");
 		expect(output).toContain("</div></div>");
+	});
+});
+
+describe("callouts with CRLF line endings", () => {
+	test("rewrites callouts in CRLF content", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableCallouts: true,
+		});
+
+		const file = await processor.process({
+			value: "> [!tip] Pro Tip\r\n> Body text\r\n",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain('data-callout="tip"');
+		expect(output).toContain('<div class="callout-title">Pro Tip</div>');
+		expect(output).not.toContain("[!tip]");
 	});
 });
 
