@@ -753,10 +753,12 @@ async function processEmbedsInTree(
 						replacementNodes.push(createTextNode(fullMatch));
 					} else {
 						try {
-							const content = await fs.promises.readFile(
-								resolved.targetPage.absolutePath,
-								"utf-8",
-							);
+							const content = (
+								await fs.promises.readFile(
+									resolved.targetPage.absolutePath,
+									"utf-8",
+								)
+							).replace(/\r\n?/g, "\n");
 							const parsed = parsedEmbed;
 							let transcludedContent: string | undefined;
 

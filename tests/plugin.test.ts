@@ -841,6 +841,29 @@ describe("transclusion", () => {
 	});
 });
 
+describe("transclusion with CRLF source files", () => {
+	const crlfFixtureRoot = path.resolve(
+		process.cwd(),
+		"tests/fixtures/transclusion-crlf",
+	);
+
+	test("applies callouts and footnotes in CRLF transcluded content", async () => {
+		const processor = makeProcessor(crlfFixtureRoot, {
+			enableCallouts: true,
+			enableTransclusion: true,
+		});
+		const file = await processor.process({
+			value: "![[source]]",
+			path: path.resolve(crlfFixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain('data-callout="tip"');
+		expect(output).toContain("First line. Second line.");
+		expect(output).not.toContain("\r");
+	});
+});
+
 describe("tag linking", () => {
 	test("rewrites tags into markdown links", async () => {
 		const processor = makeProcessor(fixtureRoot, {
