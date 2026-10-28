@@ -880,6 +880,24 @@ describe("callouts", () => {
 	});
 });
 
+describe("callouts with CRLF line endings", () => {
+	test("rewrites callouts in CRLF content", async () => {
+		const processor = makeProcessor(fixtureRoot, {
+			enableCallouts: true,
+		});
+
+		const file = await processor.process({
+			value: "> [!tip] Pro Tip\r\n> Body text\r\n",
+			path: path.resolve(fixtureRoot, "index.md"),
+		});
+
+		const output = String(file);
+		expect(output).toContain('data-callout="tip"');
+		expect(output).toContain('<div class="callout-title">Pro Tip</div>');
+		expect(output).not.toContain("[!tip]");
+	});
+});
+
 describe("case-insensitive lookup", () => {
 	test("forwards case-insensitive lookup option through remark resolution", async () => {
 		const processor = makeProcessor(strictFixtureRoot, {

@@ -1068,7 +1068,7 @@ function processCallouts(tree: Root): void {
 		);
 		if (!firstText) return;
 
-		const lines = firstText.value.split("\n");
+		const lines = firstText.value.split(/\r?\n/);
 		const headerLine = lines[0] ?? "";
 		if (!CALLOUT_HEADER_PATTERN.exec(headerLine)) return;
 
@@ -1091,7 +1091,7 @@ function processCallouts(tree: Root): void {
 		);
 		if (!firstText) continue;
 
-		const lines = firstText.value.split("\n");
+		const lines = firstText.value.split(/\r?\n/);
 		const headerLine = lines[0] ?? "";
 		const calloutMatch = CALLOUT_HEADER_PATTERN.exec(headerLine);
 		if (!calloutMatch) continue;
